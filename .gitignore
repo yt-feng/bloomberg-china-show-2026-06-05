@@ -1,0 +1,5 @@
+.DS_Store
+tmp/
+downloads/*.mp4
+downloads/*.part
+*.log
