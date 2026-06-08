@@ -1,6 +1,6 @@
 # Bloomberg China Show Download
 
-One-command local workflow for downloading Bloomberg video pages that are reachable in Chrome through the browser proxy plugin.
+One-command local workflow for downloading Bloomberg video pages through the local proxy subscription, without using the foreground Chrome browser by default.
 
 Daily use:
 
@@ -9,7 +9,9 @@ python3 tools/download_bloomberg_video.py \
   --url 'https://www.bloomberg.com/news/videos/2026-06-08/the-china-show-6-8-2026-video'
 ```
 
-The script opens Chrome, probes the page, fetches Bloomberg's media manifest, selects the best non-ad HLS variant, downloads segments concurrently, remuxes to MP4, verifies the output with `ffprobe`, and cleans the temporary work directory.
+The script resolves the Bloomberg asset ID, fetches Bloomberg's media manifest, selects the best non-ad HLS variant, downloads segments concurrently, remuxes to MP4, verifies the output with `ffprobe`, and cleans the temporary work directory.
+
+Default discovery is non-invasive: it reuses cached URL-to-asset mappings when available and otherwise uses background proxy/headless paths. The foreground Chrome browser is used only when explicitly requested with `--fetch-mode chrome`.
 
 One-time local proxy setup:
 
@@ -24,6 +26,7 @@ chmod 600 tmp/proxy_subscription_url.txt
 Useful switches:
 
 - `--dry-run`: discover and select the HLS URL without downloading.
+- `--fetch-mode chrome`: manually fall back to the older visible-Chrome probe path.
 - `--keep-tmp`: keep probe JSON, manifests, playlists, and segment work files.
 - `--force`: replace an existing output file.
 - `--workers 16`: control concurrent segment downloads.
@@ -31,6 +34,7 @@ Useful switches:
 Known downloaded outputs:
 
 - `downloads/the_china_show_2026_06_05_1080p.mp4`
+- `downloads/the_china_show_2026_06_04_1080p.mp4`
 - `downloads/the_china_show_2026_06_08_1080p.mp4`
 
-The workflow only downloads public HLS media URLs exposed by the Bloomberg page in Chrome. It does not bypass DRM, paywall checks, or encrypted streams.
+The workflow only downloads public HLS media URLs exposed by Bloomberg's own media manifests. It does not bypass DRM, paywall checks, or encrypted streams.

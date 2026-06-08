@@ -2,16 +2,26 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import html
 import json
 import os
 import re
+import select
 import shutil
+import socket
+import socketserver
+import ssl
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import unquote, urljoin, urlsplit
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import proxy_hls_downloader as hls_downloader  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,12 +35,22 @@ DOWNLOADER = TOOLS / "proxy_hls_downloader.py"
 DEFAULT_SUBSCRIPTION = ROOT / "tmp/proxy_sub.raw"
 DEFAULT_SUBSCRIPTION_URL_FILE = ROOT / "tmp/proxy_subscription_url.txt"
 DEFAULT_PROXY_CACHE = ROOT / "tmp/working_proxy.url"
+DEFAULT_PROXY_TEST_URL = "https://www.google.com/generate_204"
 
 UUID_RE = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
 HLS_URL_RE = re.compile(r"https?://[^\s'\"<>]+?\.m3u8(?:\?[^\s'\"<>]*)?", re.IGNORECASE)
+BROWSER_UA = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/137.0.0.0 Safari/537.36"
+)
 
 
 class FetchError(RuntimeError):
+    pass
+
+
+class ProxyFetchError(FetchError):
     pass
 
 
@@ -65,6 +85,155 @@ def chmod_private(path: Path) -> None:
         path.chmod(0o600)
     except OSError:
         pass
+
+
+def read_http_header(sock: socket.socket, limit: int = 1024 * 1024) -> bytes:
+    data = bytearray()
+    while b"\r\n\r\n" not in data:
+        chunk = sock.recv(65536)
+        if not chunk:
+            break
+        data.extend(chunk)
+        if len(data) > limit:
+            raise OSError("HTTP header too large")
+    return bytes(data)
+
+
+def proxy_auth_header(proxy_url: str) -> str | None:
+    parts = urlsplit(proxy_url)
+    if parts.username is None:
+        return None
+    username = unquote(parts.username)
+    password = unquote(parts.password or "")
+    token = base64.b64encode(f"{username}:{password}".encode()).decode()
+    return f"Proxy-Authorization: Basic {token}"
+
+
+def rewrite_proxy_request(header: bytes, auth_header: str | None) -> bytes:
+    text = header.decode("iso-8859-1", "replace")
+    head, _, rest = text.partition("\r\n\r\n")
+    lines = head.split("\r\n")
+    output = [lines[0]]
+    for line in lines[1:]:
+        lower = line.lower()
+        if lower.startswith("proxy-authorization:") or lower.startswith("proxy-connection:"):
+            continue
+        output.append(line)
+    if auth_header:
+        output.append(auth_header)
+    return ("\r\n".join(output) + "\r\n\r\n" + rest).encode("iso-8859-1")
+
+
+def tunnel_sockets(left: socket.socket, right: socket.socket, timeout: int = 120) -> None:
+    sockets = [left, right]
+    while sockets:
+        readable, _, _ = select.select(sockets, [], [], timeout)
+        if not readable:
+            break
+        for source in readable:
+            try:
+                data = source.recv(65536)
+            except OSError:
+                return
+            if not data:
+                return
+            target = right if source is left else left
+            try:
+                target.sendall(data)
+            except OSError:
+                return
+
+
+class LocalProxyServer:
+    def __init__(self, upstream_proxy: str, *, google_doh: bool) -> None:
+        self.upstream_proxy = upstream_proxy
+        self.google_doh = google_doh
+        self.server: socketserver.ThreadingTCPServer | None = None
+        self.thread: threading.Thread | None = None
+
+    def __enter__(self) -> str:
+        parent = self
+
+        class Handler(socketserver.BaseRequestHandler):
+            def handle(self) -> None:
+                parent.handle_client(self.request)
+
+        class Server(socketserver.ThreadingTCPServer):
+            allow_reuse_address = True
+            daemon_threads = True
+
+        self.server = Server(("127.0.0.1", 0), Handler)
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+        host, port = self.server.server_address
+        return f"http://{host}:{port}"
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        if self.server:
+            self.server.shutdown()
+            self.server.server_close()
+        if self.thread:
+            self.thread.join(timeout=2)
+
+    def connect_upstream(self) -> socket.socket:
+        parts = urlsplit(self.upstream_proxy)
+        if parts.scheme not in {"http", "https"}:
+            raise OSError(f"Local forwarding only supports http/https proxies, got {parts.scheme}")
+        if not parts.hostname or not parts.port:
+            raise OSError("Proxy URL must include host and port")
+        connect_host = parts.hostname
+        if self.google_doh:
+            connect_host = hls_downloader.google_doh_resolve(parts.hostname) or connect_host
+        raw = socket.create_connection((connect_host, parts.port), timeout=30)
+        if parts.scheme == "https":
+            context = ssl.create_default_context()
+            return context.wrap_socket(raw, server_hostname=parts.hostname)
+        return raw
+
+    def handle_client(self, client: socket.socket) -> None:
+        client.settimeout(60)
+        upstream: socket.socket | None = None
+        try:
+            request = read_http_header(client)
+            if not request:
+                return
+            upstream = self.connect_upstream()
+            upstream.settimeout(60)
+            upstream.sendall(rewrite_proxy_request(request, proxy_auth_header(self.upstream_proxy)))
+            response = read_http_header(upstream)
+            if response:
+                client.sendall(response)
+            tunnel_sockets(client, upstream)
+        except OSError:
+            try:
+                client.sendall(b"HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n")
+            except OSError:
+                pass
+        finally:
+            try:
+                client.close()
+            except OSError:
+                pass
+            if upstream:
+                try:
+                    upstream.close()
+                except OSError:
+                    pass
+
+
+def chrome_binary() -> str:
+    candidates = [
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
+        "google-chrome",
+        "chromium",
+    ]
+    for candidate in candidates:
+        if candidate.startswith("/") and Path(candidate).exists():
+            return candidate
+        if not candidate.startswith("/") and shutil.which(candidate):
+            return candidate
+    raise SystemExit("No Chrome/Chromium binary found for headless mode.")
 
 
 def run(
@@ -194,6 +363,10 @@ def normalize_probe_text(text: str) -> str:
     return text.replace("\\/", "/").replace("\\u002F", "/").replace("\\u002f", "/")
 
 
+def normalize_embedded_script_text(text: str) -> str:
+    return html.unescape(normalize_probe_text(text)).replace('\\"', '"')
+
+
 def extract_asset_ids(probe: dict) -> list[str]:
     found: list[str] = []
 
@@ -219,6 +392,69 @@ def extract_asset_ids(probe: dict) -> list[str]:
             for match in pattern.finditer(text):
                 add(match.group(1))
     return found
+
+
+def extract_url_bound_asset_ids(probe: dict, page_url: str) -> list[str]:
+    target_path = urlsplit(page_url).path
+    if not target_path:
+        return []
+
+    found: list[str] = []
+
+    def add(value: str) -> None:
+        value = value.lower()
+        if re.fullmatch(UUID_RE, value, flags=re.IGNORECASE) and value not in found:
+            found.append(value)
+
+    object_pattern = re.compile(r"\{[^{}]{0,2600}\}", re.DOTALL)
+    asset_pattern = re.compile(rf'assetI[Dd]"\s*:\s*"({UUID_RE})"', re.IGNORECASE)
+    page_id_pattern = re.compile(
+        rf'pageId"\s*:\s*"({UUID_RE})".{{0,1200}}"name"\s*:\s*"parsely-link"\s*,\s*"content"\s*:\s*"[^"]*{re.escape(target_path)}"',
+        re.IGNORECASE | re.DOTALL,
+    )
+
+    for text in walk_strings(probe):
+        text = normalize_embedded_script_text(text)
+        if target_path not in text:
+            continue
+        for object_match in object_pattern.finditer(text):
+            item = object_match.group(0)
+            if target_path not in item:
+                continue
+            asset_match = asset_pattern.search(item)
+            if asset_match:
+                add(asset_match.group(1))
+        for match in page_id_pattern.finditer(text):
+            add(match.group(1))
+    return found
+
+
+def choose_asset_id(probe: dict, page_url: str, candidates: list[str], override: str | None = None) -> str | None:
+    if override:
+        override = override.strip().lower()
+        if not re.fullmatch(UUID_RE, override, flags=re.IGNORECASE):
+            raise SystemExit(f"--asset-id is not a valid UUID: {override}")
+        return override
+
+    url_bound = extract_url_bound_asset_ids(probe, page_url)
+    if url_bound:
+        return url_bound[0]
+    return candidates[0] if candidates else None
+
+
+def cached_asset_id_for_url(page_url: str) -> str | None:
+    tmp_dir = ROOT / "tmp"
+    if not tmp_dir.exists():
+        return None
+    for path in sorted(tmp_dir.glob("auto_*/media_probe.json"), reverse=True):
+        try:
+            probe = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        matches = extract_url_bound_asset_ids(probe, page_url)
+        if matches:
+            return matches[0]
+    return None
 
 
 def extract_hls_urls(value: object) -> list[str]:
@@ -259,10 +495,182 @@ def fetch_text_via_chrome(url: str, work_dir: Path, label: str, timeout: int = 9
     return str(text)
 
 
-def fetch_embed_manifest(asset_id: str, work_dir: Path) -> tuple[dict, str]:
+def fetch_text_via_proxy(
+    url: str,
+    work_dir: Path,
+    label: str,
+    proxy: str,
+    *,
+    google_doh: bool,
+    referer: str,
+    timeout: int = 90,
+) -> str:
+    work_dir.mkdir(parents=True, exist_ok=True)
+    output = work_dir / f"{safe_file_part(label)}.txt"
+    resolve_entries = hls_downloader.proxy_resolve_entry(
+        proxy,
+        work_dir,
+        chrome_doh=False,
+        google_doh=google_doh,
+    )
+    config = hls_downloader.curl_config(
+        proxy,
+        url,
+        output,
+        extra=[
+            "http1.1",
+            "compressed",
+            "max-time = 180",
+            f'user-agent = "{BROWSER_UA}"',
+            'header = "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,application/vnd.apple.mpegurl,application/x-mpegURL,text/plain,*/*;q=0.8"',
+            'header = "Accept-Language: en-US,en;q=0.9"',
+            'header = "Cache-Control: no-cache"',
+            'header = "Pragma: no-cache"',
+            'header = "Sec-Fetch-Dest: document"',
+            'header = "Sec-Fetch-Mode: navigate"',
+            'header = "Sec-Fetch-Site: none"',
+            'header = "Upgrade-Insecure-Requests: 1"',
+            'write-out = "%{http_code}"',
+        ],
+        resolve_entries=resolve_entries,
+        referer=referer,
+    )
+    proc = hls_downloader.run_curl_with_config(config, timeout=timeout)
+    status = (proc.stdout or "").strip()
+    if proc.returncode != 0 or not output.exists() or output.stat().st_size == 0:
+        detail = (proc.stderr or status or "").strip()
+        raise ProxyFetchError(f"Proxy fetch failed for {label}: {detail}")
+    if status and status not in {"200", "204"}:
+        raise ProxyFetchError(f"Proxy fetch returned HTTP {status} for {label}")
+    return output.read_text(errors="ignore")
+
+
+def html_title(text: str) -> str:
+    for pattern in (
+        r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)["\']',
+        r'<meta[^>]+name=["\']parsely-title["\'][^>]+content=["\']([^"\']+)["\']',
+        r"<title[^>]*>(.*?)</title>",
+    ):
+        match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
+        if match:
+            return html.unescape(re.sub(r"\s+", " ", match.group(1)).strip())
+    return ""
+
+
+def html_text_sample(text: str, limit: int = 1200) -> str:
+    body = re.sub(r"(?is)<script[^>]*>.*?</script>", " ", text)
+    body = re.sub(r"(?is)<style[^>]*>.*?</style>", " ", body)
+    body = re.sub(r"(?s)<[^>]+>", " ", body)
+    body = html.unescape(body)
+    return re.sub(r"\s+", " ", body).strip()[:limit]
+
+
+def script_texts_from_html(text: str) -> list[str]:
+    scripts = []
+    for match in re.finditer(r"(?is)<script[^>]*>(.*?)</script>", text):
+        content = match.group(1)
+        if content and re.search(r"assetI[Dd]|media-manifest|m3u8|playlistItems|currentVideo", content):
+            scripts.append(content)
+    if not scripts:
+        scripts.append(text)
+    return scripts
+
+
+def probe_page_via_proxy(url: str, work_dir: Path, fetcher) -> dict:
+    log("Fetching Bloomberg page in background via proxy")
+    text = fetcher(url, "page_html", timeout=120)
+    probe = {
+        "url": url,
+        "title": html_title(text),
+        "ready": "proxy-fetch",
+        "textSample": html_text_sample(text),
+        "scripts": script_texts_from_html(text),
+        "links": re.findall(r'''(?i)(?:href|src)=["']([^"']+)["']''', text),
+        "videos": [],
+        "sources": [],
+        "performance": [],
+        "globals": [],
+        "assetIds": [],
+        "manifestUrls": [],
+        "m3u8Urls": [],
+    }
+    probe["assetIds"] = extract_asset_ids(probe)
+    probe["m3u8Urls"] = extract_hls_urls(probe)
+    (work_dir / "media_probe.json").write_text(json.dumps(probe, indent=2))
+    return probe
+
+
+def probe_page_via_headless(url: str, work_dir: Path, proxy: str, *, google_doh: bool) -> dict:
+    parts = urlsplit(proxy)
+    if parts.scheme not in {"http", "https"}:
+        raise SystemExit("Headless mode currently requires an http/https proxy node.")
+    profile_dir = work_dir / "headless_chrome_profile"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    log("Fetching Bloomberg page with isolated headless Chrome")
+    target_url = f"view-source:{url}"
+    with LocalProxyServer(proxy, google_doh=google_doh) as local_proxy:
+        proc = run(
+            [
+                chrome_binary(),
+                "--headless=new",
+                "--disable-gpu",
+                "--disable-background-networking",
+                "--disable-default-apps",
+                "--disable-extensions",
+                "--disable-javascript",
+                "--disable-sync",
+                "--disable-translate",
+                "--hide-scrollbars",
+                "--blink-settings=imagesEnabled=false",
+                "--no-first-run",
+                "--no-default-browser-check",
+                f"--user-data-dir={profile_dir}",
+                f"--proxy-server={local_proxy}",
+                "--proxy-bypass-list=<-loopback>",
+                "--window-size=1440,1200",
+                "--timeout=30000",
+                "--virtual-time-budget=3000",
+                "--dump-dom",
+                target_url,
+            ],
+            check=False,
+            capture=True,
+            timeout=45,
+        )
+    text = proc.stdout or ""
+    if proc.returncode != 0 or not text.strip():
+        detail = (proc.stderr or text or "").strip()
+        raise ProxyFetchError(f"Headless Chrome failed to fetch page: {detail[-800:]}")
+    if "line-content" in text and "&lt;" in text:
+        fragments = re.findall(r'<span class="line-content">(.*?)</span>', text, flags=re.DOTALL)
+        if fragments:
+            text = "\n".join(html.unescape(re.sub(r"<[^>]+>", "", fragment)) for fragment in fragments)
+    (work_dir / "page_headless.html").write_text(text)
+    probe = {
+        "url": url,
+        "title": html_title(text),
+        "ready": "headless-chrome",
+        "textSample": html_text_sample(text),
+        "scripts": script_texts_from_html(text),
+        "links": re.findall(r'''(?i)(?:href|src)=["']([^"']+)["']''', text),
+        "videos": [],
+        "sources": [],
+        "performance": [],
+        "globals": [],
+        "assetIds": [],
+        "manifestUrls": [],
+        "m3u8Urls": [],
+    }
+    probe["assetIds"] = extract_asset_ids(probe)
+    probe["m3u8Urls"] = extract_hls_urls(probe)
+    (work_dir / "media_probe.json").write_text(json.dumps(probe, indent=2))
+    return probe
+
+
+def fetch_embed_manifest(asset_id: str, work_dir: Path, fetcher) -> tuple[dict, str]:
     url = f"https://www.bloomberg.com/media-manifest/embed?id={asset_id}&variant=LOOP&streamType=HD"
     log(f"Fetching Bloomberg embed manifest for asset {asset_id}")
-    text = fetch_text_via_chrome(url, work_dir, "embed_manifest")
+    text = fetcher(url, "embed_manifest", timeout=90)
     (work_dir / "embed_manifest.json").write_text(text)
     try:
         data = json.loads(text)
@@ -402,12 +810,12 @@ def looks_like_direct_variant(url: str) -> bool:
     return any(token in path for token in ("fhd", "hd", "sd", "1080", "720", "480", "360"))
 
 
-def discover_variants(urls: list[str], work_dir: Path) -> list[Variant]:
+def discover_variants(urls: list[str], work_dir: Path, fetcher) -> list[Variant]:
     variants: list[Variant] = []
     for index, url in enumerate(urls, start=1):
         try:
             log(f"Fetching HLS candidate {index}/{len(urls)}")
-            text = fetch_text_via_chrome(url, work_dir, f"hls_{index:02d}", timeout=90)
+            text = fetcher(url, f"hls_{index:02d}", timeout=90)
         except FetchError as exc:
             if looks_like_direct_variant(url):
                 width, height, bandwidth = quality_from_url(url)
@@ -530,6 +938,55 @@ def ensure_subscription(args: argparse.Namespace) -> Path:
     return subscription
 
 
+def cached_proxy(args: argparse.Namespace, work_dir: Path) -> str | None:
+    cache_path = resolve_path(args.proxy_cache)
+    if not cache_path.exists() or cache_path.stat().st_size == 0:
+        return None
+    work_dir.mkdir(parents=True, exist_ok=True)
+    proxy = cache_path.read_text().strip()
+    if not proxy:
+        return None
+    target = work_dir / "working_proxy.url"
+    target.write_text(proxy)
+    chmod_private(target)
+    log(f"Using cached working proxy from {rel(cache_path)}")
+    return proxy
+
+
+def scan_working_proxy(args: argparse.Namespace, subscription: Path, work_dir: Path) -> str:
+    log("Scanning proxy subscription in background")
+    proxy, _ = hls_downloader.test_proxies(
+        subscription,
+        args.proxy_test_url or DEFAULT_PROXY_TEST_URL,
+        work_dir,
+        kind="http",
+        chrome_doh=False,
+        google_doh=args.google_doh,
+        referer=args.url,
+    )
+    save_proxy_cache(work_dir, args.proxy_cache)
+    return proxy
+
+
+def build_proxy_fetcher(args: argparse.Namespace, subscription: Path, work_dir: Path):
+    proxy = cached_proxy(args, work_dir)
+    if not proxy:
+        proxy = scan_working_proxy(args, subscription, work_dir)
+
+    def fetcher(url: str, label: str, timeout: int = 90) -> str:
+        return fetch_text_via_proxy(
+            url,
+            work_dir,
+            label,
+            proxy,
+            google_doh=args.google_doh,
+            referer=args.url,
+            timeout=timeout,
+        )
+
+    return fetcher, proxy
+
+
 def prime_proxy_cache(work_dir: Path, cache_path: Path) -> None:
     cache_path = resolve_path(cache_path)
     if cache_path.exists() and cache_path.stat().st_size > 0:
@@ -565,7 +1022,7 @@ def run_downloader(args: argparse.Namespace, variant: Variant, subscription: Pat
         str(output),
         "--workers",
         str(args.workers),
-        "--chrome-doh",
+        "--google-doh",
         "--referer",
         args.url,
     ]
@@ -640,12 +1097,15 @@ def write_plan(work_dir: Path, url: str, asset_id: str | None, candidates: list[
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Download a Bloomberg video URL through the established Chrome/proxy workflow.")
+    parser = argparse.ArgumentParser(description="Download a Bloomberg video URL through the background proxy workflow.")
     parser.add_argument("--url", required=True, help="Bloomberg video page URL.")
     parser.add_argument("--subscription", type=Path, default=DEFAULT_SUBSCRIPTION)
     parser.add_argument("--subscription-url", help="Proxy subscription URL. Prefer env/file for normal use.")
     parser.add_argument("--subscription-url-file", type=Path, default=DEFAULT_SUBSCRIPTION_URL_FILE)
     parser.add_argument("--refresh-subscription", action="store_true")
+    parser.add_argument("--fetch-mode", choices=("headless", "proxy", "chrome"), default="headless")
+    parser.add_argument("--proxy-test-url", help=f"URL used when scanning subscription nodes. Defaults to {DEFAULT_PROXY_TEST_URL}.")
+    parser.add_argument("--google-doh", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--workers", type=int, default=16)
     parser.add_argument("--output-dir", type=Path, default=ROOT / "downloads")
     parser.add_argument("--output", type=Path)
@@ -654,7 +1114,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--keep-tmp", action="store_true")
     parser.add_argument("--dry-run", action="store_true", help="Discover and select the HLS variant, but do not download.")
     parser.add_argument("--force", action="store_true", help="Replace an existing output file.")
-    parser.add_argument("--no-open", action="store_true", help="Use the current Chrome tab instead of opening the URL.")
+    parser.add_argument("--asset-id", help="Debug override for Bloomberg assetId.")
+    parser.add_argument("--no-open", action="store_true", help="Chrome mode only: use the current Chrome tab instead of opening the URL.")
     parser.add_argument("--page-wait", type=float, default=6.0)
     parser.add_argument("--probe-retries", type=int, default=4)
     return parser
@@ -676,19 +1137,89 @@ def main(argv: list[str] | None = None) -> int:
 
     success = False
     try:
-        open_and_activate(args.url, no_open=args.no_open, page_wait=args.page_wait)
-        probe = probe_page(work_dir, args.probe_retries)
+        subscription: Path | None = None
+        probe: dict | None = None
+        cached_asset_id = None if args.asset_id else cached_asset_id_for_url(args.url)
+        asset_id = args.asset_id or cached_asset_id
+        if args.fetch_mode in {"headless", "proxy"}:
+            subscription = ensure_subscription(args)
+            fetcher, proxy = build_proxy_fetcher(args, subscription, work_dir)
+            if not asset_id:
+                try:
+                    if args.fetch_mode == "headless":
+                        probe = probe_page_via_headless(args.url, work_dir, proxy, google_doh=args.google_doh)
+                    else:
+                        probe = probe_page_via_proxy(args.url, work_dir, fetcher)
+                except ProxyFetchError as exc:
+                    if cached_proxy(args, work_dir):
+                        log(f"Cached proxy failed during discovery: {exc}")
+                        proxy = scan_working_proxy(args, subscription, work_dir)
+
+                        def fetcher(url: str, label: str, timeout: int = 90) -> str:
+                            return fetch_text_via_proxy(
+                                url,
+                                work_dir,
+                                label,
+                                proxy,
+                                google_doh=args.google_doh,
+                                referer=args.url,
+                                timeout=timeout,
+                            )
+
+                        if args.fetch_mode == "headless":
+                            probe = probe_page_via_headless(args.url, work_dir, proxy, google_doh=args.google_doh)
+                        else:
+                            probe = probe_page_via_proxy(args.url, work_dir, fetcher)
+                    else:
+                        raise
+        else:
+            if not asset_id:
+                open_and_activate(args.url, no_open=args.no_open, page_wait=args.page_wait)
+                probe = probe_page(work_dir, args.probe_retries)
+            else:
+                open_and_activate(args.url, no_open=args.no_open, page_wait=args.page_wait)
+
+            def fetcher(url: str, label: str, timeout: int = 90) -> str:
+                return fetch_text_via_chrome(url, work_dir, label, timeout=timeout)
+
+        if probe is None:
+            probe = {
+                "url": args.url,
+                "title": "",
+                "ready": "asset-id-cache",
+                "scripts": [],
+                "links": [],
+                "videos": [],
+                "sources": [],
+                "performance": [],
+                "globals": [],
+                "assetIds": [asset_id] if asset_id else [],
+                "manifestUrls": [],
+                "m3u8Urls": [],
+            }
+            work_dir.mkdir(parents=True, exist_ok=True)
+            (work_dir / "media_probe.json").write_text(json.dumps(probe, indent=2))
+
         asset_ids = extract_asset_ids(probe)
-        asset_id = asset_ids[0] if asset_ids else None
-        if asset_ids:
-            log(f"Found assetId: {asset_id}")
+        if not asset_id:
+            asset_id = choose_asset_id(probe, args.url, asset_ids, args.asset_id)
+        url_bound_asset_ids = extract_url_bound_asset_ids(probe, args.url)
+        if asset_id:
+            if args.asset_id:
+                log(f"Using overridden assetId: {asset_id}")
+            elif cached_asset_id:
+                log(f"Using cached assetId for requested URL: {asset_id}")
+            elif url_bound_asset_ids:
+                log(f"Matched assetId to requested URL: {asset_id}")
+            else:
+                log(f"Found assetId: {asset_id}")
         else:
             log("No assetId found; falling back to probed HLS URLs")
 
         candidates: list[str] = []
         if asset_id:
             try:
-                manifest, _manifest_url = fetch_embed_manifest(asset_id, work_dir)
+                manifest, _manifest_url = fetch_embed_manifest(asset_id, work_dir, fetcher)
                 candidates.extend(hls_urls_from_manifest(manifest))
             except FetchError as exc:
                 log(f"Embed manifest fetch failed; falling back to page resources: {exc}")
@@ -698,7 +1229,7 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit("No HLS candidates found from Bloomberg page or embed manifest.")
 
         log(f"Evaluating {len(candidates)} HLS candidate(s)")
-        variants = discover_variants(candidates, work_dir)
+        variants = discover_variants(candidates, work_dir, fetcher)
         selected = select_best_variant(variants)
         log(f"Selected HLS variant: {variant_summary(selected)}")
         log(selected.url)
@@ -709,7 +1240,8 @@ def main(argv: list[str] | None = None) -> int:
             success = True
             return 0
 
-        subscription = ensure_subscription(args)
+        if subscription is None:
+            subscription = ensure_subscription(args)
         run_downloader(args, selected, subscription, work_dir, output)
         verify_output(output)
         success = True

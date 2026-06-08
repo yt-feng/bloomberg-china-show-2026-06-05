@@ -1,10 +1,10 @@
 # Architecture
 
-This repository preserves the repeatable code path used to download a Bloomberg video whose media page is reachable in Chrome through a browser proxy plugin, while the terminal network is not directly able to reach Bloomberg/Fastly/Google.
+This repository preserves the repeatable code path used to download Bloomberg videos through a local proxy subscription. The current default path avoids using the user's foreground Chrome browser; the older Chrome/AppleScript path remains as an explicit fallback.
 
 ## Scope
 
-The workflow downloads public HLS media URLs that the Bloomberg page itself requests in Chrome. It does not bypass DRM, paywall checks, or encrypted streams. If a future page exposes only DRM-protected media, this workflow should stop rather than attempt circumvention.
+The workflow downloads public HLS media URLs exposed by Bloomberg's own media manifests. It does not bypass DRM, paywall checks, or encrypted streams. If a future page exposes only DRM-protected media, this workflow should stop rather than attempt circumvention.
 
 Large media outputs and temporary proxy material are intentionally excluded from git.
 
@@ -13,8 +13,9 @@ Large media outputs and temporary proxy material are intentionally excluded from
 - `tools/download_bloomberg_video.py`
   - The daily entry point.
   - Accepts a Bloomberg video page URL and orchestrates the full flow.
-  - Opens and activates Chrome, probes the page, extracts the Bloomberg `assetId`, fetches the Bloomberg `embed` manifest, selects the best HLS variant, refreshes or reuses the proxy subscription, calls the segmented downloader, verifies the MP4, and cleans temporary work files.
-  - Reuses `tmp/proxy_sub.raw` and `tmp/working_proxy.url` so repeated runs do not need subscription input or full proxy rescans.
+  - Reuses cached URL-to-asset mappings when available, fetches Bloomberg's `embed` manifest through the proxy, selects the best HLS variant, refreshes or reuses the proxy subscription, calls the segmented downloader, verifies the MP4, and cleans temporary work files.
+  - Uses `tmp/proxy_sub.raw` and `tmp/working_proxy.url` so repeated runs do not need subscription input or full proxy rescans.
+  - Defaults to non-invasive discovery. It only uses the visible Chrome/AppleScript path when `--fetch-mode chrome` is explicitly supplied.
 
 - `tools/activate_bloomberg_tab.applescript`
   - Finds and activates an already-open Chrome tab by URL substring.
@@ -37,10 +38,11 @@ Large media outputs and temporary proxy material are intentionally excluded from
   - Reads a local proxy subscription file.
   - Decodes Ghelper-style base64 subscription entries.
   - Normalizes curl-compatible `https` and `socks5` proxy nodes.
-  - Uses Chrome DNS-over-HTTPS results to add curl `resolve` mappings for proxy node hostnames.
+  - Uses Google DNS-over-HTTPS or Chrome DNS-over-HTTPS results to add curl `resolve` mappings for proxy node hostnames.
   - Tests proxies with an HTTP endpoint.
   - Reuses a cached working proxy when one is provided.
   - Downloads HLS segments concurrently.
+  - Stores segment caches under a playlist-URL hash, so an interrupted wrong-source run cannot be reused for a different HLS playlist.
   - Reports segment progress by actual completion order, so one slow early segment does not hide the rest of the active downloads.
   - Refuses encrypted HLS playlists containing `#EXT-X-KEY`.
   - Remuxes the local HLS playlist into MP4 with `ffmpeg -c copy`.
@@ -58,9 +60,9 @@ Internally, the script performs these steps:
 
 1. Derive a stable output name from the Bloomberg URL, for example `downloads/the_china_show_2026_06_08_1080p.mp4`.
 2. If that MP4 already exists and `--force` is not set, verify it with `ffprobe` and exit without re-downloading.
-3. Open the Bloomberg video page in Chrome with the proxy plugin enabled.
-4. Use `activate_bloomberg_tab.applescript` to focus the target tab.
-5. Use `chrome_media_probe.applescript` to extract `currentVideo.assetId`, equivalent media IDs, and direct HLS clues from the page payload.
+3. Reuse a cached `assetId` for the exact Bloomberg URL when one exists in `tmp/auto_*/media_probe.json`. This lets historical playlist items download without opening any browser.
+4. If no cached mapping exists, attempt non-invasive discovery first. The script has background proxy and isolated-headless code paths; visible Chrome is reserved for explicit `--fetch-mode chrome` fallback.
+5. When page discovery is required, prefer a playlist item `assetID` whose `url` matches the requested Bloomberg path. This matters for older episode pages because Bloomberg can render a current/recommended video in `currentVideo` while the requested historical episode appears in `playlistItems`.
 6. Fetch Bloomberg's own media metadata first:
 
 ```text
@@ -68,14 +70,14 @@ https://www.bloomberg.com/media-manifest/embed?id=<assetId>&variant=LOOP&streamT
 ```
 
 7. From that JSON, prefer `streams[].url` pointing to Bloomberg `media-manifest/videos/LOOP/HD/...m3u8`.
-8. Fetch the LOOP/HD master manifest with `chrome_fetch_text.applescript`; terminal networking is not trusted for Bloomberg discovery.
+8. Fetch the LOOP/HD master manifest through the cached proxy. The current default passes `--google-doh` so proxy-node DNS does not require Chrome.
 9. Select the highest useful Bloomberg/Fastly HLS variant, typically `FHD5000.m3u8`, while deprioritizing `pubads.g.doubleclick.net` DAI playlists.
 10. Reuse `tmp/proxy_sub.raw` if present, otherwise refresh it from `--subscription-url`, `BLOOMBERG_PROXY_SUBSCRIPTION_URL`, or `tmp/proxy_subscription_url.txt`.
 11. Prime the run with `tmp/working_proxy.url` if available, so the downloader first tries the previously working proxy instead of scanning the full subscription.
-12. Run `proxy_hls_downloader.py` with `--chrome-doh`, the selected HLS variant, and the original Bloomberg URL as the HTTP Referer.
+12. Run `proxy_hls_downloader.py` with `--google-doh`, the selected HLS variant, and the original Bloomberg URL as the HTTP Referer.
 13. The downloader:
    - decodes proxy nodes,
-   - asks Chrome to resolve proxy node DNS via DoH,
+   - resolves proxy node DNS via DoH,
    - writes curl-only `resolve` mappings in temporary config files,
    - tries the cached working proxy first when available,
    - tests the proxy path,
@@ -93,7 +95,15 @@ The user-facing goal is one approval for one top-level command when Codex runs t
 python3 tools/download_bloomberg_video.py --url '<Bloomberg video URL>'
 ```
 
-That command owns the Chrome open/probe calls, Bloomberg manifest fetches, proxy subscription refresh, segmented curl downloads, ffmpeg remux, ffprobe verification, and temporary cleanup. In Codex, approving the command prefix `python3 tools/download_bloomberg_video.py` is the practical way to avoid separate confirmations for every `open`, `osascript`, `curl`, and cleanup subprocess.
+That command owns cached asset lookup, background proxy fetches, Bloomberg manifest fetches, proxy subscription refresh, segmented curl downloads, ffmpeg remux, ffprobe verification, and temporary cleanup. In Codex, approving the command prefix `python3 tools/download_bloomberg_video.py` is the practical way to avoid separate confirmations for every subprocess.
+
+The visible Chrome path is not part of default operation anymore. Use it only as an explicit fallback:
+
+```bash
+python3 tools/download_bloomberg_video.py \
+  --url '<Bloomberg video URL>' \
+  --fetch-mode chrome
+```
 
 The proxy subscription URL should not be committed. For normal local use, store it in one of these ignored/local locations:
 
@@ -120,6 +130,37 @@ The 2026-06-08 page initially exposed a `pubads.g.doubleclick.net/ondemand/hls/.
 The download itself also looked more stalled than it was because the downloader consumed futures with `pool.map`, which returns results in input order. One slow early segment could block progress printing even while later segments were already downloaded. This is now fixed by consuming futures with `as_completed`.
 
 ## Known Runs
+
+Target page:
+
+```text
+https://www.bloomberg.com/news/videos/2026-06-04/the-china-show-6-4-2026-video
+```
+
+Asset ID:
+
+```text
+60917b5e-c2fc-4063-8e1e-7021324686ea
+```
+
+Selected 1080p HLS variant:
+
+```text
+https://bbgvod-s3-us-east1-zenko.global.ssl.fastly.net/vod/m/MTAyNDgyNDA/Q2xvdWRfMTQxNDEzMw/1870f065-3f58-431f-a613-b8e675c5155d/1870f065-3f58-431f-a613-b8e675c5155dFHD5000.m3u8
+```
+
+Final output:
+
+```text
+downloads/the_china_show_2026_06_04_1080p.mp4
+```
+
+Verified properties:
+
+- Video: H.264, 1920x1080, 29.97 fps
+- Audio: AAC
+- Duration: 5507.87 seconds
+- Size: about 3.3 GB
 
 Target page:
 
@@ -217,6 +258,16 @@ chmod 600 tmp/proxy_subscription_url.txt
 
 Manual debug commands remain useful when the orchestrator cannot classify a new Bloomberg page shape.
 
+Explicit visible-Chrome fallback:
+
+```bash
+python3 tools/download_bloomberg_video.py \
+  --url 'https://www.bloomberg.com/news/videos/2026-06-08/the-china-show-6-8-2026-video' \
+  --fetch-mode chrome \
+  --dry-run \
+  --keep-tmp
+```
+
 Activate the page manually:
 
 ```bash
@@ -251,7 +302,7 @@ python3 tools/proxy_hls_downloader.py \
   --playlist-url 'about:blank' \
   --proxy-test-url 'https://www.google.com/generate_204' \
   --work-dir tmp/google_proxy_test \
-  --chrome-doh
+  --google-doh
 ```
 
 Download and remux a known HLS variant manually:
@@ -263,7 +314,7 @@ python3 tools/proxy_hls_downloader.py \
   --work-dir tmp/hls_work \
   --output downloads/the_china_show_2026_06_05_1080p.mp4 \
   --workers 16 \
-  --chrome-doh \
+  --google-doh \
   --referer 'https://www.bloomberg.com/news/videos/2026-06-05/the-china-show-6-5-2026-video'
 ```
 
@@ -287,11 +338,18 @@ ffprobe -v error \
 ## Failure Modes
 
 - `curl` cannot resolve proxy hostnames:
-  - Use `--chrome-doh`, which asks Chrome to resolve proxy hostnames and injects curl `resolve` entries.
+  - Use `--google-doh` first. It resolves proxy hostnames through DNS-over-HTTPS and injects curl `resolve` entries without using Chrome.
+  - Use `--chrome-doh` only as a manual legacy fallback.
 
 - Terminal cannot reach Bloomberg/Fastly:
-  - Use Chrome AppleScript fetches for page-origin manifest discovery.
+  - Prefer cached URL-to-asset mappings plus Bloomberg `media-manifest/embed`.
+  - Use `--fetch-mode chrome` only when page discovery is required and the background paths cannot classify the URL.
   - Use the normalized proxy path for Fastly HLS segment downloads.
+
+- Historical Bloomberg page resolves to the wrong episode:
+  - Do not trust the first `currentVideo.assetId`.
+  - Prefer a playlist item `assetID` whose `url` exactly matches the requested Bloomberg path.
+  - Segment caches are keyed by selected playlist URL, so a stopped wrong-source run cannot be remuxed as another episode.
 
 - HLS playlist has `#EXT-X-KEY`:
   - Stop and inspect. Do not attempt DRM or protected-content bypass.

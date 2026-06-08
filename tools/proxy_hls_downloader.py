@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import base64
 import concurrent.futures
+import hashlib
 import json
 import os
 import re
@@ -153,7 +154,27 @@ def chrome_doh_resolve(host: str, script: Path) -> str | None:
     return None
 
 
-def proxy_resolve_entry(proxy: str, out_dir: Path, chrome_doh: bool) -> list[str]:
+def google_doh_resolve(host: str) -> str | None:
+    url = f"https://dns.google/resolve?name={quote(host)}&type=A"
+    proc = subprocess.run(
+        ["curl", "--location", "--fail", "--silent", "--show-error", "--max-time", "20", url],
+        text=True,
+        capture_output=True,
+        timeout=30,
+    )
+    if proc.returncode != 0:
+        return None
+    try:
+        payload = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        return None
+    for answer in payload.get("Answer") or []:
+        if answer.get("type") == 1 and answer.get("data"):
+            return str(answer["data"])
+    return None
+
+
+def proxy_resolve_entry(proxy: str, out_dir: Path, chrome_doh: bool, google_doh: bool = False) -> list[str]:
     u = urlsplit(proxy)
     if not u.hostname or not u.port:
         return []
@@ -166,6 +187,12 @@ def proxy_resolve_entry(proxy: str, out_dir: Path, chrome_doh: bool) -> list[str
             cache = {}
     key = f"{u.hostname}:{u.port}"
     ip = cache.get(key)
+    if not ip and google_doh:
+        ip = google_doh_resolve(u.hostname)
+        if ip:
+            cache[key] = ip
+            cache_path.write_text(json.dumps(cache, indent=2))
+            chmod_private(cache_path)
     if not ip and chrome_doh:
         script = Path(__file__).resolve().parent / "chrome_fetch_url.applescript"
         ip = chrome_doh_resolve(u.hostname, script)
@@ -182,6 +209,7 @@ def test_proxies(
     out_dir: Path,
     kind: str = "m3u8",
     chrome_doh: bool = False,
+    google_doh: bool = False,
     referer: str = "https://www.bloomberg.com/",
 ) -> tuple[str, Path | None]:
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -199,7 +227,7 @@ def test_proxies(
         output = out_dir / f"proxy_test_{index:02d}.m3u8"
         started = time.time()
         extra = ['write-out = "%{http_code}"'] if kind == "http" else None
-        resolve_entries = proxy_resolve_entry(proxy, out_dir, chrome_doh)
+        resolve_entries = proxy_resolve_entry(proxy, out_dir, chrome_doh, google_doh)
         proc = run_curl_with_config(
             curl_config(proxy, test_url, output, extra=extra, resolve_entries=resolve_entries, referer=referer),
             timeout=75,
@@ -230,10 +258,11 @@ def fetch_playlist_with_proxy(
     playlist_url: str,
     out_dir: Path,
     chrome_doh: bool,
+    google_doh: bool,
     referer: str,
 ) -> Path | None:
     selected_path = out_dir / "selected_variant.m3u8"
-    resolve_entries = proxy_resolve_entry(proxy, out_dir, chrome_doh)
+    resolve_entries = proxy_resolve_entry(proxy, out_dir, chrome_doh, google_doh)
     proc = run_curl_with_config(
         curl_config(proxy, playlist_url, selected_path, resolve_entries=resolve_entries, referer=referer),
         timeout=75,
@@ -261,6 +290,10 @@ def parse_playlist(text: str, base_url: str) -> tuple[list[str], list[str]]:
         segment_urls.append(absolute)
         output_lines.append(absolute)
     return output_lines, segment_urls
+
+
+def playlist_cache_key(playlist_url: str) -> str:
+    return hashlib.sha256(playlist_url.encode("utf-8")).hexdigest()[:12]
 
 
 def download_one(args: tuple[int, str, list[str], str, Path, str]) -> dict[str, object]:
@@ -294,6 +327,7 @@ def download_segments(
     out_dir: Path,
     workers: int,
     chrome_doh: bool,
+    google_doh: bool,
     referer: str,
 ) -> Path:
     text = playlist_path.read_text(errors="ignore")
@@ -303,11 +337,12 @@ def download_segments(
     if not urls:
         raise SystemExit("No media segments found in selected playlist.")
 
-    segment_dir = out_dir / "segments"
+    cache_key = playlist_cache_key(playlist_url)
+    segment_dir = out_dir / f"segments_{cache_key}"
     segment_dir.mkdir(parents=True, exist_ok=True)
     local_lines: list[str] = []
     tasks = []
-    resolve_entries = proxy_resolve_entry(proxy, out_dir, chrome_doh)
+    resolve_entries = proxy_resolve_entry(proxy, out_dir, chrome_doh, google_doh)
     for line in playlist_lines:
         if not line or line.startswith("#"):
             local_lines.append(line)
@@ -318,7 +353,7 @@ def download_segments(
         tasks.append((index, proxy, resolve_entries, line, target, referer))
         local_lines.append(str(target.resolve()))
 
-    local_playlist = out_dir / "local_video.m3u8"
+    local_playlist = out_dir / f"local_video_{cache_key}.m3u8"
     local_playlist.write_text("\n".join(local_lines) + "\n")
 
     print(f"Downloading {len(tasks)} segments with {workers} workers", flush=True)
@@ -386,6 +421,7 @@ def main() -> int:
     parser.add_argument("--workers", type=int, default=16)
     parser.add_argument("--test-only", action="store_true")
     parser.add_argument("--chrome-doh", action="store_true")
+    parser.add_argument("--google-doh", action="store_true")
     parser.add_argument("--referer", default="https://www.bloomberg.com/")
     args = parser.parse_args()
 
@@ -398,6 +434,7 @@ def main() -> int:
             args.work_dir,
             kind="http",
             chrome_doh=args.chrome_doh,
+            google_doh=args.google_doh,
             referer=args.referer,
         )
         return 0
@@ -408,6 +445,7 @@ def main() -> int:
             args.playlist_url,
             args.work_dir,
             args.chrome_doh,
+            args.google_doh,
             args.referer,
         )
         if selected_playlist:
@@ -421,6 +459,7 @@ def main() -> int:
             args.playlist_url,
             args.work_dir,
             chrome_doh=args.chrome_doh,
+            google_doh=args.google_doh,
             referer=args.referer,
         )
 
@@ -434,6 +473,7 @@ def main() -> int:
         args.work_dir,
         args.workers,
         args.chrome_doh,
+        args.google_doh,
         args.referer,
     )
     remux(local_playlist, args.output)
