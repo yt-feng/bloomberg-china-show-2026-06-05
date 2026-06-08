@@ -300,15 +300,25 @@ def download_segments(
     print(f"Downloading {len(tasks)} segments with {workers} workers", flush=True)
     failures: list[dict[str, object]] = []
     completed = 0
+    cached = 0
     total_bytes = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-        for result in pool.map(download_one, tasks):
+        futures = [pool.submit(download_one, task) for task in tasks]
+        for future in concurrent.futures.as_completed(futures):
+            result = future.result()
             completed += 1
             total_bytes += int(result.get("bytes") or 0)
+            if result.get("cached"):
+                cached += 1
             if not result["ok"]:
                 failures.append(result)
             if completed % 25 == 0 or completed == len(tasks):
-                print(f"  {completed}/{len(tasks)} segments, {total_bytes / 1024 / 1024:.1f} MiB", flush=True)
+                print(
+                    f"  {completed}/{len(tasks)} segments, "
+                    f"{total_bytes / 1024 / 1024:.1f} MiB, "
+                    f"{cached} cached, {len(failures)} failed",
+                    flush=True,
+                )
 
     if failures:
         fail_path = out_dir / "segment_failures.json"
