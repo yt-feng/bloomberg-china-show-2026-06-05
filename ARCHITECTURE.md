@@ -10,14 +10,20 @@ Large media outputs and temporary proxy material are intentionally excluded from
 
 ## Components
 
+- `tools/download_bloomberg_video.py`
+  - The daily entry point.
+  - Accepts a Bloomberg video page URL and orchestrates the full flow.
+  - Opens and activates Chrome, probes the page, extracts the Bloomberg `assetId`, fetches the Bloomberg `embed` manifest, selects the best HLS variant, refreshes or reuses the proxy subscription, calls the segmented downloader, verifies the MP4, and cleans temporary work files.
+  - Reuses `tmp/proxy_sub.raw` and `tmp/working_proxy.url` so repeated runs do not need subscription input or full proxy rescans.
+
 - `tools/activate_bloomberg_tab.applescript`
   - Finds and activates an already-open Chrome tab by URL substring.
   - Used before page probing so AppleScript reads the intended Bloomberg tab.
 
 - `tools/chrome_media_probe.applescript`
   - Runs JavaScript in the active Chrome tab.
-  - Extracts page title, video element metadata, performance resource URLs, and media manifest clues.
-  - Primary output is used to locate Bloomberg `media-manifest` and `.m3u8` URLs.
+  - Extracts page title, video element metadata, performance resource URLs, media manifest clues, direct `.m3u8` URLs, and candidate `assetId` values.
+  - Primary output is used by the one-command script to locate Bloomberg `media-manifest` and `.m3u8` URLs without manual page inspection.
 
 - `tools/chrome_fetch_text.applescript`
   - Fetches same-origin text from the active Bloomberg page context.
@@ -33,34 +39,67 @@ Large media outputs and temporary proxy material are intentionally excluded from
   - Normalizes curl-compatible `https` and `socks5` proxy nodes.
   - Uses Chrome DNS-over-HTTPS results to add curl `resolve` mappings for proxy node hostnames.
   - Tests proxies with an HTTP endpoint.
+  - Reuses a cached working proxy when one is provided.
   - Downloads HLS segments concurrently.
   - Reports segment progress by actual completion order, so one slow early segment does not hide the rest of the active downloads.
+  - Refuses encrypted HLS playlists containing `#EXT-X-KEY`.
   - Remuxes the local HLS playlist into MP4 with `ffmpeg -c copy`.
 
 ## Preferred Data Flow
 
-1. Open the Bloomberg video page in Chrome with the proxy plugin enabled.
-2. Use `activate_bloomberg_tab.applescript` to focus the target tab.
-3. Use `chrome_media_probe.applescript` to extract `currentVideo.assetId` or equivalent media IDs from the page payload.
-4. Fetch Bloomberg's own media metadata first:
+The preferred path is the one-command orchestrator:
+
+```bash
+python3 tools/download_bloomberg_video.py \
+  --url 'https://www.bloomberg.com/news/videos/2026-06-08/the-china-show-6-8-2026-video'
+```
+
+Internally, the script performs these steps:
+
+1. Derive a stable output name from the Bloomberg URL, for example `downloads/the_china_show_2026_06_08_1080p.mp4`.
+2. If that MP4 already exists and `--force` is not set, verify it with `ffprobe` and exit without re-downloading.
+3. Open the Bloomberg video page in Chrome with the proxy plugin enabled.
+4. Use `activate_bloomberg_tab.applescript` to focus the target tab.
+5. Use `chrome_media_probe.applescript` to extract `currentVideo.assetId`, equivalent media IDs, and direct HLS clues from the page payload.
+6. Fetch Bloomberg's own media metadata first:
 
 ```text
 https://www.bloomberg.com/media-manifest/embed?id=<assetId>&variant=LOOP&streamType=HD
 ```
 
-5. From that JSON, prefer `streams[].url` pointing to Bloomberg `media-manifest/videos/LOOP/HD/...m3u8`.
-6. Fetch the LOOP/HD master manifest with `chrome_fetch_text.applescript` if terminal networking cannot reach `www.bloomberg.com`.
-7. Select the highest useful Bloomberg/Fastly HLS variant, typically `FHD5000.m3u8`.
-8. Fetch the proxy subscription into `tmp/`.
-9. Run `proxy_hls_downloader.py` with `--chrome-doh`.
-10. The downloader:
+7. From that JSON, prefer `streams[].url` pointing to Bloomberg `media-manifest/videos/LOOP/HD/...m3u8`.
+8. Fetch the LOOP/HD master manifest with `chrome_fetch_text.applescript`; terminal networking is not trusted for Bloomberg discovery.
+9. Select the highest useful Bloomberg/Fastly HLS variant, typically `FHD5000.m3u8`, while deprioritizing `pubads.g.doubleclick.net` DAI playlists.
+10. Reuse `tmp/proxy_sub.raw` if present, otherwise refresh it from `--subscription-url`, `BLOOMBERG_PROXY_SUBSCRIPTION_URL`, or `tmp/proxy_subscription_url.txt`.
+11. Prime the run with `tmp/working_proxy.url` if available, so the downloader first tries the previously working proxy instead of scanning the full subscription.
+12. Run `proxy_hls_downloader.py` with `--chrome-doh`, the selected HLS variant, and the original Bloomberg URL as the HTTP Referer.
+13. The downloader:
    - decodes proxy nodes,
    - asks Chrome to resolve proxy node DNS via DoH,
    - writes curl-only `resolve` mappings in temporary config files,
+   - tries the cached working proxy first when available,
    - tests the proxy path,
    - downloads all `.ts` segments with a worker pool,
    - writes a local `.m3u8`,
    - remuxes to MP4.
+14. Verify the MP4 with `ffprobe`.
+15. Delete the per-video work directory unless `--keep-tmp` is set. The final MP4, cached subscription, and cached working proxy remain local and ignored by git.
+
+## Approval And Automation Model
+
+The user-facing goal is one approval for one top-level command when Codex runs the workflow:
+
+```bash
+python3 tools/download_bloomberg_video.py --url '<Bloomberg video URL>'
+```
+
+That command owns the Chrome open/probe calls, Bloomberg manifest fetches, proxy subscription refresh, segmented curl downloads, ffmpeg remux, ffprobe verification, and temporary cleanup. In Codex, approving the command prefix `python3 tools/download_bloomberg_video.py` is the practical way to avoid separate confirmations for every `open`, `osascript`, `curl`, and cleanup subprocess.
+
+The proxy subscription URL should not be committed. For normal local use, store it in one of these ignored/local locations:
+
+- `tmp/proxy_subscription_url.txt`
+- `BLOOMBERG_PROXY_SUBSCRIPTION_URL`
+- `tmp/proxy_sub.raw` if the subscription has already been fetched
 
 ## Fallback Data Flow
 
@@ -152,13 +191,39 @@ Verified properties:
 
 ## Operational Commands
 
-Activate the page:
+Daily download:
+
+```bash
+python3 tools/download_bloomberg_video.py \
+  --url 'https://www.bloomberg.com/news/videos/2026-06-08/the-china-show-6-8-2026-video'
+```
+
+Discovery-only dry run:
+
+```bash
+python3 tools/download_bloomberg_video.py \
+  --url 'https://www.bloomberg.com/news/videos/2026-06-08/the-china-show-6-8-2026-video' \
+  --dry-run \
+  --keep-tmp
+```
+
+One-time local proxy subscription setup:
+
+```bash
+mkdir -p tmp
+printf '%s\n' '<proxy subscription URL>' > tmp/proxy_subscription_url.txt
+chmod 600 tmp/proxy_subscription_url.txt
+```
+
+Manual debug commands remain useful when the orchestrator cannot classify a new Bloomberg page shape.
+
+Activate the page manually:
 
 ```bash
 osascript tools/activate_bloomberg_tab.applescript 'the-china-show-6-5-2026-video'
 ```
 
-Probe media URLs from the active Chrome tab:
+Probe media URLs manually from the active Chrome tab:
 
 ```bash
 osascript tools/chrome_media_probe.applescript > tmp/media_probe.json
@@ -189,7 +254,7 @@ python3 tools/proxy_hls_downloader.py \
   --chrome-doh
 ```
 
-Download and remux:
+Download and remux a known HLS variant manually:
 
 ```bash
 python3 tools/proxy_hls_downloader.py \
@@ -198,19 +263,8 @@ python3 tools/proxy_hls_downloader.py \
   --work-dir tmp/hls_work \
   --output downloads/the_china_show_2026_06_05_1080p.mp4 \
   --workers 16 \
-  --chrome-doh
-```
-
-Download and remux the 2026-06-08 LOOP/HD source:
-
-```bash
-python3 tools/proxy_hls_downloader.py \
-  --subscription tmp/proxy_sub.raw \
-  --playlist-url 'https://bbgvod-s3-us-east1-zenko.global.ssl.fastly.net/vod/m/MTAyNTEyODM/Q2xvdWRfMTQxNjczMA/Thechinashow6826/Thechinashow6826FHD5000.m3u8' \
-  --work-dir tmp/hls_work_2026_06_08_bbg \
-  --output downloads/the_china_show_2026_06_08_1080p.mp4 \
-  --workers 16 \
-  --chrome-doh
+  --chrome-doh \
+  --referer 'https://www.bloomberg.com/news/videos/2026-06-05/the-china-show-6-5-2026-video'
 ```
 
 Verify output:
@@ -257,7 +311,6 @@ ffprobe -v error \
 ## Extension Points
 
 - Add support for more proxy subscription formats in `normalize_proxy`.
-- Add automatic asset-ID extraction and LOOP/HD master-manifest selection.
 - Add proxy speed benchmarking instead of using the first working proxy.
-- Add automatic master-manifest parsing so the script can select the highest variant directly.
 - Add subtitle playlist download and sidecar `.vtt` export if needed.
+- Add a scheduled "latest episode" resolver if the workflow needs to discover the newest Bloomberg China Show URL automatically instead of receiving the URL from the user.

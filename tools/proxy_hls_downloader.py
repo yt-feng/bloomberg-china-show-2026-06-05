@@ -89,6 +89,7 @@ def curl_config(
     output: Path,
     extra: list[str] | None = None,
     resolve_entries: list[str] | None = None,
+    referer: str = "https://www.bloomberg.com/",
 ) -> str:
     opts = [
         "location",
@@ -100,7 +101,7 @@ def curl_config(
         "retry = 2",
         "retry-delay = 1",
         'user-agent = "Mozilla/5.0"',
-        'header = "Referer: https://www.bloomberg.com/news/videos/2026-06-05/the-china-show-6-5-2026-video"',
+        f'header = "Referer: {referer}"',
         f'proxy = "{proxy}"',
         f'url = "{url}"',
         f'output = "{output}"',
@@ -181,6 +182,7 @@ def test_proxies(
     out_dir: Path,
     kind: str = "m3u8",
     chrome_doh: bool = False,
+    referer: str = "https://www.bloomberg.com/",
 ) -> tuple[str, Path | None]:
     out_dir.mkdir(parents=True, exist_ok=True)
     nodes = load_subscription(subscription)
@@ -199,7 +201,7 @@ def test_proxies(
         extra = ['write-out = "%{http_code}"'] if kind == "http" else None
         resolve_entries = proxy_resolve_entry(proxy, out_dir, chrome_doh)
         proc = run_curl_with_config(
-            curl_config(proxy, test_url, output, extra=extra, resolve_entries=resolve_entries),
+            curl_config(proxy, test_url, output, extra=extra, resolve_entries=resolve_entries, referer=referer),
             timeout=75,
         )
         elapsed = time.time() - started
@@ -223,6 +225,24 @@ def test_proxies(
     raise SystemExit("No working curl-compatible proxy found.")
 
 
+def fetch_playlist_with_proxy(
+    proxy: str,
+    playlist_url: str,
+    out_dir: Path,
+    chrome_doh: bool,
+    referer: str,
+) -> Path | None:
+    selected_path = out_dir / "selected_variant.m3u8"
+    resolve_entries = proxy_resolve_entry(proxy, out_dir, chrome_doh)
+    proc = run_curl_with_config(
+        curl_config(proxy, playlist_url, selected_path, resolve_entries=resolve_entries, referer=referer),
+        timeout=75,
+    )
+    if proc.returncode == 0 and selected_path.exists() and selected_path.read_text(errors="ignore").startswith("#EXTM3U"):
+        return selected_path
+    return None
+
+
 def parse_playlist(text: str, base_url: str) -> tuple[list[str], list[str]]:
     lines = [line.strip() for line in text.splitlines()]
     output_lines: list[str] = []
@@ -243,8 +263,8 @@ def parse_playlist(text: str, base_url: str) -> tuple[list[str], list[str]]:
     return output_lines, segment_urls
 
 
-def download_one(args: tuple[int, str, list[str], str, Path]) -> dict[str, object]:
-    index, proxy, resolve_entries, url, output = args
+def download_one(args: tuple[int, str, list[str], str, Path, str]) -> dict[str, object]:
+    index, proxy, resolve_entries, url, output, referer = args
     if output.exists() and output.stat().st_size > 0:
         return {"index": index, "ok": True, "cached": True, "bytes": output.stat().st_size}
     cfg = curl_config(
@@ -253,6 +273,7 @@ def download_one(args: tuple[int, str, list[str], str, Path]) -> dict[str, objec
         output,
         extra=["max-time = 180", "retry = 4", "retry-all-errors"],
         resolve_entries=resolve_entries,
+        referer=referer,
     )
     proc = run_curl_with_config(cfg, timeout=220)
     ok = proc.returncode == 0 and output.exists() and output.stat().st_size > 0
@@ -273,8 +294,11 @@ def download_segments(
     out_dir: Path,
     workers: int,
     chrome_doh: bool,
+    referer: str,
 ) -> Path:
     text = playlist_path.read_text(errors="ignore")
+    if "#EXT-X-KEY" in text.upper():
+        raise SystemExit("Selected HLS playlist is encrypted (#EXT-X-KEY); refusing to download.")
     playlist_lines, urls = parse_playlist(text, playlist_url)
     if not urls:
         raise SystemExit("No media segments found in selected playlist.")
@@ -291,7 +315,7 @@ def download_segments(
         index = len(tasks)
         ext = Path(urlsplit(line).path).suffix or ".ts"
         target = segment_dir / f"seg_{index:05d}{ext}"
-        tasks.append((index, proxy, resolve_entries, line, target))
+        tasks.append((index, proxy, resolve_entries, line, target, referer))
         local_lines.append(str(target.resolve()))
 
     local_playlist = out_dir / "local_video.m3u8"
@@ -332,9 +356,11 @@ def remux(local_playlist: Path, output_mp4: Path) -> None:
     output_mp4.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
         "ffmpeg",
+        "-nostdin",
         "-hide_banner",
         "-loglevel",
         "warning",
+        "-n",
         "-allowed_extensions",
         "ALL",
         "-i",
@@ -360,28 +386,56 @@ def main() -> int:
     parser.add_argument("--workers", type=int, default=16)
     parser.add_argument("--test-only", action="store_true")
     parser.add_argument("--chrome-doh", action="store_true")
+    parser.add_argument("--referer", default="https://www.bloomberg.com/")
     args = parser.parse_args()
 
     proxy_file = args.work_dir / "working_proxy.url"
     selected_playlist = args.work_dir / "selected_variant.m3u8"
     if args.proxy_test_url:
-        test_proxies(args.subscription, args.proxy_test_url, args.work_dir, kind="http", chrome_doh=args.chrome_doh)
+        test_proxies(
+            args.subscription,
+            args.proxy_test_url,
+            args.work_dir,
+            kind="http",
+            chrome_doh=args.chrome_doh,
+            referer=args.referer,
+        )
         return 0
-    if proxy_file.exists() and selected_playlist.exists():
-        proxy = proxy_file.read_text().strip()
-        print("Using cached working proxy", flush=True)
-    else:
+    proxy = proxy_file.read_text().strip() if proxy_file.exists() else ""
+    if proxy:
+        selected_playlist = fetch_playlist_with_proxy(
+            proxy,
+            args.playlist_url,
+            args.work_dir,
+            args.chrome_doh,
+            args.referer,
+        )
+        if selected_playlist:
+            print("Using cached working proxy", flush=True)
+        else:
+            print("Cached working proxy failed; scanning subscription", flush=True)
+            proxy = ""
+    if not proxy:
         proxy, selected_playlist = test_proxies(
             args.subscription,
             args.playlist_url,
             args.work_dir,
             chrome_doh=args.chrome_doh,
+            referer=args.referer,
         )
 
     if args.test_only:
         return 0
 
-    local_playlist = download_segments(proxy, args.playlist_url, selected_playlist, args.work_dir, args.workers, args.chrome_doh)
+    local_playlist = download_segments(
+        proxy,
+        args.playlist_url,
+        selected_playlist,
+        args.work_dir,
+        args.workers,
+        args.chrome_doh,
+        args.referer,
+    )
     remux(local_playlist, args.output)
     print(f"Wrote {args.output}", flush=True)
     return 0
