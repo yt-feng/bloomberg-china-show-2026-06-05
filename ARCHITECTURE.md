@@ -13,9 +13,11 @@ Large media outputs and temporary proxy material are intentionally excluded from
 - `tools/download_bloomberg_video.py`
   - The daily entry point.
   - Accepts a Bloomberg video page URL and orchestrates the full flow.
-  - Reuses cached URL-to-asset mappings when available, fetches Bloomberg's `embed` manifest through the proxy, selects the best HLS variant, refreshes or reuses the proxy subscription, calls the segmented downloader, verifies the MP4, and cleans temporary work files.
+  - Reuses cached URL-to-asset mappings when available, fetches Bloomberg's `embed` manifest through the proxy, selects the best HLS variant, refreshes or reuses the proxy subscription, prefers `yt-dlp` for HLS download/remux, falls back to the built-in segmented downloader, verifies the MP4, and cleans temporary work files.
   - Uses `tmp/proxy_sub.raw` and `tmp/working_proxy.url` so repeated runs do not need subscription input or full proxy rescans.
   - Defaults to non-invasive discovery. It only uses the visible Chrome/AppleScript path when `--fetch-mode chrome` is explicitly supplied.
+  - For `yt-dlp`, reads `YTDLP_BIN`, `PATH`, or `python -m yt_dlp`. The repo records this dependency in `requirements.txt`.
+  - Also accepts direct `.m3u8` URLs and Haystack mirror pages. Those paths skip Bloomberg page discovery and go straight to HLS selection/download.
 
 - `tools/activate_bloomberg_tab.applescript`
   - Finds and activates an already-open Chrome tab by URL substring.
@@ -35,6 +37,7 @@ Large media outputs and temporary proxy material are intentionally excluded from
   - Used here for DNS-over-HTTPS lookups when system DNS cannot resolve proxy node hostnames.
 
 - `tools/proxy_hls_downloader.py`
+  - The fallback downloader when `yt-dlp` is missing or fails.
   - Reads a local proxy subscription file.
   - Decodes Ghelper-style base64 subscription entries.
   - Normalizes curl-compatible `https` and `socks5` proxy nodes.
@@ -58,24 +61,28 @@ python3 tools/download_bloomberg_video.py \
 
 Internally, the script performs these steps:
 
-1. Derive a stable output name from the Bloomberg URL, for example `downloads/the_china_show_2026_06_08_1080p.mp4`.
+1. Derive a stable output name from the input URL, for example `downloads/the_china_show_2026_06_08_1080p.mp4`.
 2. If that MP4 already exists and `--force` is not set, verify it with `ffprobe` and exit without re-downloading.
-3. Reuse a cached `assetId` for the exact Bloomberg URL when one exists in `tmp/auto_*/media_probe.json`. This lets historical playlist items download without opening any browser.
-4. If no cached mapping exists, attempt non-invasive discovery first. The script has background proxy and isolated-headless code paths; visible Chrome is reserved for explicit `--fetch-mode chrome` fallback.
-5. When page discovery is required, prefer a playlist item `assetID` whose `url` matches the requested Bloomberg path. This matters for older episode pages because Bloomberg can render a current/recommended video in `currentVideo` while the requested historical episode appears in `playlistItems`.
-6. Fetch Bloomberg's own media metadata first:
+3. If the input URL is already `.m3u8`, skip page discovery and evaluate that HLS playlist directly.
+4. If the input URL is a Haystack video page, fetch the static HTML directly, extract the current page's Bloomberg Haystack media ID, derive the CloudFront HLS master URL, and evaluate that HLS playlist. The parser deliberately restricts itself to the page's Bloomberg video ID so recommended videos in the page payload cannot win variant selection.
+5. For Bloomberg pages, reuse a cached `assetId` for the exact Bloomberg URL when one exists in `tmp/auto_*/media_probe.json`. This lets historical playlist items download without opening any browser.
+6. If no cached mapping exists, attempt non-invasive discovery first. The script has background proxy and isolated-headless code paths; visible Chrome is reserved for explicit `--fetch-mode chrome` fallback.
+7. When Bloomberg page discovery is required, prefer a playlist item `assetID` whose `url` matches the requested Bloomberg path. This matters for older episode pages because Bloomberg can render a current/recommended video in `currentVideo` while the requested historical episode appears in `playlistItems`.
+8. Fetch Bloomberg's own media metadata first:
 
 ```text
 https://www.bloomberg.com/media-manifest/embed?id=<assetId>&variant=LOOP&streamType=HD
 ```
 
-7. From that JSON, prefer `streams[].url` pointing to Bloomberg `media-manifest/videos/LOOP/HD/...m3u8`.
-8. Fetch the LOOP/HD master manifest through the cached proxy. The current default passes `--google-doh` so proxy-node DNS does not require Chrome.
-9. Select the highest useful Bloomberg/Fastly HLS variant, typically `FHD5000.m3u8`, while deprioritizing `pubads.g.doubleclick.net` DAI playlists.
-10. Reuse `tmp/proxy_sub.raw` if present, otherwise refresh it from `--subscription-url`, `BLOOMBERG_PROXY_SUBSCRIPTION_URL`, or `tmp/proxy_subscription_url.txt`.
-11. Prime the run with `tmp/working_proxy.url` if available, so the downloader first tries the previously working proxy instead of scanning the full subscription.
-12. Run `proxy_hls_downloader.py` with `--google-doh`, the selected HLS variant, and the original Bloomberg URL as the HTTP Referer.
-13. The downloader:
+9. From that JSON, prefer `streams[].url` pointing to Bloomberg `media-manifest/videos/LOOP/HD/...m3u8`.
+10. Fetch the LOOP/HD master manifest through the cached proxy. The current default passes `--google-doh` so proxy-node DNS does not require Chrome.
+11. Select the highest useful Bloomberg/Fastly HLS variant, typically `FHD5000.m3u8`, while deprioritizing `pubads.g.doubleclick.net` DAI playlists.
+12. Reuse `tmp/proxy_sub.raw` if present, otherwise refresh it from `--subscription-url`, `BLOOMBERG_PROXY_SUBSCRIPTION_URL`, or `tmp/proxy_subscription_url.txt`.
+13. Prime the run with `tmp/working_proxy.url` if available, so the downloader first tries the previously working proxy instead of scanning the full subscription.
+14. Try `yt-dlp` first when available. The orchestrator passes the already-selected HLS variant, `--concurrent-fragments <workers>`, retry settings, Bloomberg Referer, browser User-Agent, and an MP4 output template. In default `--yt-dlp-proxy-mode auto`, it tries direct CDN download first because the final HLS segments are often globally reachable.
+15. If direct `yt-dlp` download fails and a cached working proxy is available with `http` or `https`, the orchestrator starts a local `127.0.0.1` proxy forwarder and passes that local URL to `yt-dlp`. This avoids exposing upstream proxy credentials in the `yt-dlp` process arguments.
+16. If `yt-dlp` is unavailable or exits non-zero in `--download-backend auto` mode, fall back to `proxy_hls_downloader.py` with `--google-doh`, the selected HLS variant, and the original Bloomberg URL as the HTTP Referer.
+17. The fallback downloader:
    - decodes proxy nodes,
    - resolves proxy node DNS via DoH,
    - writes curl-only `resolve` mappings in temporary config files,
@@ -84,8 +91,8 @@ https://www.bloomberg.com/media-manifest/embed?id=<assetId>&variant=LOOP&streamT
    - downloads all `.ts` segments with a worker pool,
    - writes a local `.m3u8`,
    - remuxes to MP4.
-14. Verify the MP4 with `ffprobe`.
-15. Delete the per-video work directory unless `--keep-tmp` is set. The final MP4, cached subscription, and cached working proxy remain local and ignored by git.
+18. Verify the MP4 with `ffprobe`.
+19. Delete the per-video work directory unless `--keep-tmp` is set. The final MP4, cached subscription, and cached working proxy remain local and ignored by git.
 
 ## Approval And Automation Model
 
@@ -110,6 +117,51 @@ The proxy subscription URL should not be committed. For normal local use, store 
 - `tmp/proxy_subscription_url.txt`
 - `BLOOMBERG_PROXY_SUBSCRIPTION_URL`
 - `tmp/proxy_sub.raw` if the subscription has already been fetched
+
+## yt-dlp Test Results And Cloud Shape
+
+`yt-dlp` is the better default HLS downloader/remuxer, but it is not a complete replacement for Bloomberg page discovery in this environment.
+
+Tested on 2026-06-09 against:
+
+```text
+https://www.bloomberg.com/news/videos/2026-06-03/dalio-ai-bubble-to-burst-as-wealth-converts-to-money-video
+```
+
+Observed behavior:
+
+- Direct `yt-dlp` against the Bloomberg page timed out without proxy.
+- Direct `yt-dlp` against the Bloomberg page through the cached proxy reached Bloomberg but got HTTP 403.
+- `yt-dlp` does not support the Haystack mirror page URL as an extractor.
+- Haystack's static HTML exposed the real HLS master:
+
+```text
+https://d2ufudlfb4rsg4.cloudfront.net/bloomberg/EzhiMr9I/adaptive/EzhiMr9I_master.m3u8
+```
+
+- `yt-dlp` downloaded that direct HLS URL successfully and produced a verified MP4.
+- The integrated Haystack path selected:
+
+```text
+https://d2ufudlfb4rsg4.cloudfront.net/bloomberg/EzhiMr9I/adaptive/hls_manifests/EzhiMr9I_hd720.m3u8
+```
+
+- Verification output from the integrated path:
+  - Downloader: `yt-dlp`, direct CDN, no proxy needed
+  - Fragments: 89
+  - Duration: 266.60 seconds
+  - Size: 31.1 MiB
+  - Video: H.264, 1280x720
+  - Audio: AAC
+
+Recommended cloud deployment shape:
+
+- Keep this repo's Bloomberg/Haystack discovery code as the page-to-HLS resolver.
+- Use `yt-dlp` as the first HLS downloader with `--concurrent-fragments`, retries, and MP4 remux. Prefer direct CDN download first, then proxy fallback.
+- Keep `proxy_hls_downloader.py` as a fallback for environments where `yt-dlp` cannot use the available proxy or where per-segment curl diagnostics are needed.
+- Use Python 3.10+ for the host image. The local Python 3.9 run works, but current `yt-dlp` warns that Python 3.9 support is deprecated.
+- Install `ffmpeg` and `ffprobe` on the host image. Install Python dependencies with `python3 -m pip install -r requirements.txt`.
+- Store proxy subscription material in environment variables or ignored runtime files, never in git.
 
 ## Fallback Data Flow
 

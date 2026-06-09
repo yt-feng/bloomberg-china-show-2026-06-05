@@ -19,6 +19,8 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import unquote, urljoin, urlsplit
+import urllib.error
+import urllib.request
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import proxy_hls_downloader as hls_downloader  # noqa: E402
@@ -283,6 +285,85 @@ def slug_from_url(url: str) -> str:
         if date_text not in slug:
             slug = f"{slug}_{date_text}"
     return slug
+
+
+def is_hls_url(url: str) -> bool:
+    return ".m3u8" in urlsplit(url).path.lower()
+
+
+def is_haystack_url(url: str) -> bool:
+    return "haystack.tv" in urlsplit(url).netloc.lower()
+
+
+def fetch_text_direct(url: str, timeout: int = 90) -> str:
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": BROWSER_UA,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,application/vnd.apple.mpegurl,application/x-mpegURL,text/plain,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            payload = response.read()
+            charset = response.headers.get_content_charset() or "utf-8"
+            return payload.decode(charset, "replace")
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        raise FetchError(f"Direct fetch failed: {exc}") from exc
+
+
+def haystack_ids_from_html(text: str) -> list[str]:
+    ids: list[str] = []
+
+    def add(value: str) -> None:
+        if re.fullmatch(r"[A-Za-z0-9_-]{6,}", value) and value not in ids:
+            ids.append(value)
+
+    head = text.split("</head>", 1)[0]
+    primary_patterns = [
+        r"haystackTV://playVideo\?index=http://haystack\.tv/id/([A-Za-z0-9_-]+)",
+        r"haystack-thumbnails/bloomberg/([A-Za-z0-9_-]+)/",
+        r"cloudfront\.net/bloomberg/([A-Za-z0-9_-]+)/",
+    ]
+    for pattern in primary_patterns:
+        for match in re.finditer(pattern, head):
+            add(match.group(1))
+    if ids:
+        return ids
+
+    patterns = [
+        r"haystack-thumbnails/bloomberg/([A-Za-z0-9_-]+)/",
+        r"cloudfront\.net/bloomberg/([A-Za-z0-9_-]+)/",
+        r"haystackTV://playVideo\?index=http://haystack\.tv/id/([A-Za-z0-9_-]+)",
+        r"haystack\.tv/id/([A-Za-z0-9_-]+)",
+    ]
+    for pattern in patterns:
+        for match in re.finditer(pattern, text):
+            add(match.group(1))
+    return ids
+
+
+def haystack_hls_candidates_from_html(text: str) -> list[str]:
+    urls: list[str] = []
+    media_ids = haystack_ids_from_html(text)
+    for media_id in media_ids:
+        token = f"/bloomberg/{media_id}/"
+        urls.extend(url for url in extract_hls_urls(text) if token in url)
+        urls.append(f"https://d2ufudlfb4rsg4.cloudfront.net/bloomberg/{media_id}/adaptive/{media_id}_master.m3u8")
+    return list(dict.fromkeys(urls))
+
+
+def discover_haystack_candidates(url: str, work_dir: Path) -> list[str]:
+    log("Fetching Haystack page directly")
+    text = fetch_text_direct(url, timeout=90)
+    work_dir.mkdir(parents=True, exist_ok=True)
+    (work_dir / "haystack_page.html").write_text(text)
+    candidates = haystack_hls_candidates_from_html(text)
+    if not candidates:
+        raise SystemExit("No Haystack HLS candidates found.")
+    log(f"Found {len(candidates)} Haystack HLS candidate(s)")
+    return candidates
 
 
 def tab_needles(url: str) -> list[str]:
@@ -811,6 +892,7 @@ def looks_like_direct_variant(url: str) -> bool:
 
 
 def discover_variants(urls: list[str], work_dir: Path, fetcher) -> list[Variant]:
+    work_dir.mkdir(parents=True, exist_ok=True)
     variants: list[Variant] = []
     for index, url in enumerate(urls, start=1):
         try:
@@ -1007,7 +1089,134 @@ def save_proxy_cache(work_dir: Path, cache_path: Path) -> None:
         log(f"Updated working proxy cache: {rel(cache_path)}")
 
 
-def run_downloader(args: argparse.Namespace, variant: Variant, subscription: Path, work_dir: Path, output: Path) -> None:
+def yt_dlp_base_command(args: argparse.Namespace) -> list[str] | None:
+    explicit = (args.yt_dlp_bin or os.environ.get("YTDLP_BIN") or "").strip()
+    if explicit:
+        return [explicit]
+
+    binary = shutil.which("yt-dlp")
+    if binary:
+        return [binary]
+
+    probe = subprocess.run(
+        [sys.executable, "-m", "yt_dlp", "--version"],
+        text=True,
+        capture_output=True,
+        timeout=20,
+    )
+    if probe.returncode == 0:
+        return [sys.executable, "-m", "yt_dlp"]
+    return None
+
+
+def yt_dlp_output_template(output: Path) -> str:
+    if output.suffix:
+        return str(output.with_suffix(".%(ext)s"))
+    return str(output) + ".%(ext)s"
+
+
+def cached_proxy_for_download(args: argparse.Namespace, work_dir: Path) -> str | None:
+    paths = [work_dir / "working_proxy.url", resolve_path(args.proxy_cache)]
+    for path in paths:
+        if path.exists() and path.stat().st_size > 0:
+            proxy = path.read_text().strip()
+            if proxy:
+                return proxy
+    return None
+
+
+def run_ytdlp_process(cmd: list[str], *, output: Path) -> bool:
+    try:
+        proc = subprocess.run(cmd, text=True)
+    except FileNotFoundError:
+        log("yt-dlp command was not found")
+        return False
+    if proc.returncode != 0:
+        log(f"yt-dlp exited with status {proc.returncode}")
+        return False
+    if output.exists() and output.stat().st_size > 0:
+        return True
+    log(f"yt-dlp finished but expected output was not found: {rel(output)}")
+    return False
+
+
+def run_ytdlp_downloader(args: argparse.Namespace, variant: Variant, work_dir: Path, output: Path) -> bool:
+    base_command = yt_dlp_base_command(args)
+    if not base_command:
+        log("yt-dlp is not installed; falling back to the built-in segmented downloader")
+        return False
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        *base_command,
+        "--no-warnings",
+        "--newline",
+        "--no-playlist",
+        "--hls-prefer-native",
+        "--concurrent-fragments",
+        str(max(1, args.workers)),
+        "--retries",
+        "10",
+        "--fragment-retries",
+        "10",
+        "--merge-output-format",
+        "mp4",
+        "--remux-video",
+        "mp4",
+        "--referer",
+        args.url,
+        "--user-agent",
+        BROWSER_UA,
+        "-f",
+        "best",
+        "-o",
+        yt_dlp_output_template(output),
+        variant.url,
+    ]
+
+    tried_direct = False
+    if args.yt_dlp_proxy_mode in {"auto", "never"}:
+        log("Starting yt-dlp HLS download without proxy")
+        tried_direct = True
+        if run_ytdlp_process(cmd, output=output):
+            return True
+        if args.yt_dlp_proxy_mode == "never":
+            return False
+        log("Direct yt-dlp download failed; trying cached proxy")
+
+    proxy = cached_proxy_for_download(args, work_dir)
+    if not proxy:
+        if args.yt_dlp_proxy_mode == "always":
+            raise SystemExit("yt-dlp proxy mode is 'always', but no cached working proxy is available.")
+        if tried_direct:
+            log("No cached working proxy for yt-dlp")
+            return False
+        log("No cached working proxy for yt-dlp; trying direct HLS download")
+        return run_ytdlp_process(cmd, output=output)
+
+    scheme = hls_downloader.proxy_scheme(proxy)
+    if scheme not in {"http", "https"}:
+        if args.yt_dlp_proxy_mode == "always":
+            raise SystemExit("yt-dlp proxy mode 'always' requires an http/https proxy for credential-safe forwarding.")
+        if tried_direct:
+            log(f"Cached proxy scheme {scheme or 'unknown'} cannot be forwarded safely")
+            return False
+        log(f"Cached proxy scheme {scheme or 'unknown'} cannot be forwarded safely; trying yt-dlp without proxy")
+        return run_ytdlp_process(cmd, output=output)
+
+    log("Starting yt-dlp HLS download through a local proxy forwarder")
+    with LocalProxyServer(proxy, google_doh=args.google_doh) as local_proxy:
+        proxied_cmd = [*cmd[:-1], "--proxy", local_proxy, cmd[-1]]
+        return run_ytdlp_process(proxied_cmd, output=output)
+
+
+def run_segmented_downloader(
+    args: argparse.Namespace,
+    variant: Variant,
+    subscription: Path,
+    work_dir: Path,
+    output: Path,
+) -> None:
     prime_proxy_cache(work_dir, args.proxy_cache)
     cmd = [
         sys.executable,
@@ -1029,6 +1238,20 @@ def run_downloader(args: argparse.Namespace, variant: Variant, subscription: Pat
     log("Starting segmented HLS download")
     run(cmd, capture=False)
     save_proxy_cache(work_dir, args.proxy_cache)
+
+
+def run_downloader(args: argparse.Namespace, variant: Variant, subscription: Path, work_dir: Path, output: Path) -> None:
+    if args.download_backend in {"auto", "yt-dlp"}:
+        if run_ytdlp_downloader(args, variant, work_dir, output):
+            save_proxy_cache(work_dir, args.proxy_cache)
+            return
+        if args.download_backend == "yt-dlp":
+            raise SystemExit("yt-dlp download failed.")
+        log("Falling back to built-in segmented HLS downloader")
+
+    if not subscription.exists():
+        subscription = ensure_subscription(args)
+    run_segmented_downloader(args, variant, subscription, work_dir, output)
 
 
 def verify_output(output: Path) -> None:
@@ -1107,6 +1330,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--proxy-test-url", help=f"URL used when scanning subscription nodes. Defaults to {DEFAULT_PROXY_TEST_URL}.")
     parser.add_argument("--google-doh", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--workers", type=int, default=16)
+    parser.add_argument("--download-backend", choices=("auto", "yt-dlp", "custom"), default="auto")
+    parser.add_argument("--yt-dlp-bin", help="Path to yt-dlp. Defaults to YTDLP_BIN, PATH, then python -m yt_dlp.")
+    parser.add_argument("--yt-dlp-proxy-mode", choices=("auto", "never", "always"), default="auto")
     parser.add_argument("--output-dir", type=Path, default=ROOT / "downloads")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--work-dir", type=Path)
@@ -1138,6 +1364,59 @@ def main(argv: list[str] | None = None) -> int:
     success = False
     try:
         subscription: Path | None = None
+        if is_hls_url(args.url):
+            candidates = [args.url]
+
+            def fetcher(url: str, label: str, timeout: int = 90) -> str:
+                del label
+                return fetch_text_direct(url, timeout=timeout)
+
+            log("Input URL is an HLS playlist; skipping page discovery")
+            log(f"Evaluating {len(candidates)} HLS candidate(s)")
+            variants = discover_variants(candidates, work_dir, fetcher)
+            selected = select_best_variant(variants)
+            log(f"Selected HLS variant: {variant_summary(selected)}")
+            log(selected.url)
+            write_plan(work_dir, args.url, None, candidates, selected, output)
+            if args.dry_run:
+                log(f"Dry run complete; planned output: {rel(output)}")
+                success = True
+                return 0
+            if args.download_backend == "custom":
+                subscription = ensure_subscription(args)
+            else:
+                subscription = resolve_path(args.subscription)
+            run_downloader(args, selected, subscription, work_dir, output)
+            verify_output(output)
+            success = True
+            return 0
+
+        if is_haystack_url(args.url):
+            candidates = discover_haystack_candidates(args.url, work_dir)
+
+            def fetcher(url: str, label: str, timeout: int = 90) -> str:
+                del label
+                return fetch_text_direct(url, timeout=timeout)
+
+            log(f"Evaluating {len(candidates)} HLS candidate(s)")
+            variants = discover_variants(candidates, work_dir, fetcher)
+            selected = select_best_variant(variants)
+            log(f"Selected HLS variant: {variant_summary(selected)}")
+            log(selected.url)
+            write_plan(work_dir, args.url, None, candidates, selected, output)
+            if args.dry_run:
+                log(f"Dry run complete; planned output: {rel(output)}")
+                success = True
+                return 0
+            if args.download_backend == "custom":
+                subscription = ensure_subscription(args)
+            else:
+                subscription = resolve_path(args.subscription)
+            run_downloader(args, selected, subscription, work_dir, output)
+            verify_output(output)
+            success = True
+            return 0
+
         probe: dict | None = None
         cached_asset_id = None if args.asset_id else cached_asset_id_for_url(args.url)
         asset_id = args.asset_id or cached_asset_id
