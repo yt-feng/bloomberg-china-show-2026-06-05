@@ -13,7 +13,7 @@ Large media outputs and temporary proxy material are intentionally excluded from
 - `tools/download_bloomberg_video.py`
   - The daily entry point.
   - Accepts a Bloomberg video page URL and orchestrates the full flow.
-  - Reuses cached URL-to-asset mappings when available, fetches Bloomberg's `embed` manifest through the proxy, selects the best HLS variant, refreshes or reuses the proxy subscription, prefers `yt-dlp` for HLS download/remux, falls back to the built-in segmented downloader, verifies the MP4, and cleans temporary work files.
+  - Reuses cached URL-to-asset mappings when available, tries Bloomberg's BRP background endpoint for page metadata, fetches Bloomberg's `embed` manifest directly first, selects the best HLS variant, prefers `yt-dlp` for HLS download/remux, falls back to proxy-backed download paths only when needed, verifies the MP4, and cleans temporary work files.
   - Uses `tmp/proxy_sub.raw` and `tmp/working_proxy.url` so repeated runs do not need subscription input or full proxy rescans.
   - Defaults to non-invasive discovery. It only uses the visible Chrome/AppleScript path when `--fetch-mode chrome` is explicitly supplied.
   - For `yt-dlp`, reads `YTDLP_BIN`, `PATH`, or `python -m yt_dlp`. The repo records this dependency in `requirements.txt`.
@@ -56,7 +56,7 @@ The preferred path is the one-command orchestrator:
 
 ```bash
 python3 tools/download_bloomberg_video.py \
-  --url 'https://www.bloomberg.com/news/videos/2026-06-08/the-china-show-6-8-2026-video'
+  --url 'https://www.bloomberg.com/news/videos/2026-06-09/the-china-show-6-9-26-video'
 ```
 
 Internally, the script performs these steps:
@@ -66,23 +66,22 @@ Internally, the script performs these steps:
 3. If the input URL is already `.m3u8`, skip page discovery and evaluate that HLS playlist directly.
 4. If the input URL is a Haystack video page, fetch the static HTML directly, extract the current page's Bloomberg Haystack media ID, derive the CloudFront HLS master URL, and evaluate that HLS playlist. The parser deliberately restricts itself to the page's Bloomberg video ID so recommended videos in the page payload cannot win variant selection.
 5. For Bloomberg pages, reuse a cached `assetId` for the exact Bloomberg URL when one exists in `tmp/auto_*/media_probe.json`. This lets historical playlist items download without opening any browser.
-6. If no cached mapping exists, attempt non-invasive discovery first. The script has background proxy and isolated-headless code paths; visible Chrome is reserved for explicit `--fetch-mode chrome` fallback.
-7. When Bloomberg page discovery is required, prefer a playlist item `assetID` whose `url` matches the requested Bloomberg path. This matters for older episode pages because Bloomberg can render a current/recommended video in `currentVideo` while the requested historical episode appears in `playlistItems`.
-8. Fetch Bloomberg's own media metadata first:
+6. If no cached mapping exists, attempt non-invasive discovery first through `https://brp-prod-bcc.bloomberg.com/...`. This backend route can return the same Next.js/RSC metadata while avoiding the normal `www.bloomberg.com` robot page from terminal/headless clients.
+7. If BRP discovery fails or is transiently unavailable, fall back to the background proxy and isolated-headless paths. Visible Chrome is reserved for explicit `--fetch-mode chrome` fallback.
+8. When Bloomberg page discovery is required, prefer a playlist item `assetID` whose `url` matches the requested Bloomberg path. This matters for older episode pages because Bloomberg can render a current/recommended video in `currentVideo` while the requested historical episode appears in `playlistItems`.
+9. Fetch Bloomberg's own media metadata directly first:
 
 ```text
 https://www.bloomberg.com/media-manifest/embed?id=<assetId>&variant=LOOP&streamType=HD
 ```
 
-9. From that JSON, prefer `streams[].url` pointing to Bloomberg `media-manifest/videos/LOOP/HD/...m3u8`.
-10. Fetch the LOOP/HD master manifest through the cached proxy. The current default passes `--google-doh` so proxy-node DNS does not require Chrome.
-11. Select the highest useful Bloomberg/Fastly HLS variant, typically `FHD5000.m3u8`, while deprioritizing `pubads.g.doubleclick.net` DAI playlists.
-12. Reuse `tmp/proxy_sub.raw` if present, otherwise refresh it from `--subscription-url`, `BLOOMBERG_PROXY_SUBSCRIPTION_URL`, or `tmp/proxy_subscription_url.txt`.
-13. Prime the run with `tmp/working_proxy.url` if available, so the downloader first tries the previously working proxy instead of scanning the full subscription.
-14. Try `yt-dlp` first when available. The orchestrator passes the already-selected HLS variant, `--concurrent-fragments <workers>`, retry settings, Bloomberg Referer, browser User-Agent, and an MP4 output template. In default `--yt-dlp-proxy-mode auto`, it tries direct CDN download first because the final HLS segments are often globally reachable.
-15. If direct `yt-dlp` download fails and a cached working proxy is available with `http` or `https`, the orchestrator starts a local `127.0.0.1` proxy forwarder and passes that local URL to `yt-dlp`. This avoids exposing upstream proxy credentials in the `yt-dlp` process arguments.
-16. If `yt-dlp` is unavailable or exits non-zero in `--download-backend auto` mode, fall back to `proxy_hls_downloader.py` with `--google-doh`, the selected HLS variant, and the original Bloomberg URL as the HTTP Referer.
-17. The fallback downloader:
+10. From that JSON, prefer `streams[].url` pointing to Bloomberg `media-manifest/videos/LOOP/HD/...m3u8`.
+11. Fetch the LOOP/HD master manifest directly first and expand it to the final CDN media playlist. Bloomberg has used both Fastly and Akamai hosts; both `bbgvod-...fastly.net` and `bbgvod-...akamaized.net` are treated as first-party Bloomberg delivery.
+12. Select the highest useful Bloomberg delivery variant, typically `FHD5000.m3u8`, while deprioritizing `pubads.g.doubleclick.net` DAI playlists.
+13. Try `yt-dlp` first when available. The orchestrator passes the already-selected final CDN HLS variant, `--concurrent-fragments <workers>`, retry settings, Bloomberg Referer, browser User-Agent, and an MP4 output template. In default `--yt-dlp-proxy-mode auto`, it tries direct CDN download first because the final HLS segments are often globally reachable.
+14. If direct `yt-dlp` download fails and a cached working proxy is available with `http` or `https`, the orchestrator starts a local `127.0.0.1` proxy forwarder and passes that local URL to `yt-dlp`. This avoids exposing upstream proxy credentials in the `yt-dlp` process arguments.
+15. If `yt-dlp` is unavailable or exits non-zero in `--download-backend auto` mode, fall back to `proxy_hls_downloader.py` with `--google-doh`, the selected HLS variant, and the original Bloomberg URL as the HTTP Referer.
+16. The fallback downloader:
    - decodes proxy nodes,
    - resolves proxy node DNS via DoH,
    - writes curl-only `resolve` mappings in temporary config files,
@@ -91,8 +90,8 @@ https://www.bloomberg.com/media-manifest/embed?id=<assetId>&variant=LOOP&streamT
    - downloads all `.ts` segments with a worker pool,
    - writes a local `.m3u8`,
    - remuxes to MP4.
-18. Verify the MP4 with `ffprobe`.
-19. Delete the per-video work directory unless `--keep-tmp` is set. The final MP4, cached subscription, and cached working proxy remain local and ignored by git.
+17. Verify the MP4 with `ffprobe`.
+18. Delete the per-video work directory unless `--keep-tmp` is set. The final MP4, cached subscription, and cached working proxy remain local and ignored by git.
 
 ## Approval And Automation Model
 
@@ -167,7 +166,7 @@ Recommended cloud deployment shape:
 
 If Bloomberg's `embed` manifest does not expose a usable `streams[].url`, inspect `performance` resources from `chrome_media_probe.applescript`.
 
-Treat `pubads.g.doubleclick.net/ondemand/hls/.../master.m3u8` as a fallback source only. It can be valid HLS, but it is a DAI path and may include ad segments, lower initial variants, or extra discontinuities. Prefer Bloomberg/Fastly `bbgvod-.../Thechinashow...FHD5000.m3u8` whenever available.
+Treat `pubads.g.doubleclick.net/ondemand/hls/.../master.m3u8` as a fallback source only. It can be valid HLS, but it is a DAI path and may include ad segments, lower initial variants, or extra discontinuities. Prefer Bloomberg delivery playlists such as `bbgvod-...fastly.net/...FHD5000.m3u8` or `bbgvod-...akamaized.net/...FHD5000.m3u8` whenever available.
 
 ## Why The 2026-06-08 Run Was Slower
 
@@ -282,20 +281,66 @@ Verified properties:
 - Duration: 5682.04 seconds
 - Size: about 3.4 GB
 
+Target page:
+
+```text
+https://www.bloomberg.com/news/videos/2026-06-09/the-china-show-6-9-26-video
+```
+
+Asset ID:
+
+```text
+b13d3699-89f2-401b-bf43-4fd85f10f9dc
+```
+
+Embed manifest:
+
+```text
+https://www.bloomberg.com/media-manifest/embed?id=b13d3699-89f2-401b-bf43-4fd85f10f9dc&variant=LOOP&streamType=HD
+```
+
+Selected 1080p HLS variant:
+
+```text
+https://bbgvod-s3-us-east1-zenko.akamaized.net/vod/m/MTAyNTI0MDQ/Q2xvdWRfMTQxNzU1Nw/TheChinashow6926/TheChinashow6926FHD5000.m3u8
+```
+
+Final output:
+
+```text
+downloads/the_china_show_6_9_26_2026_06_09_1080p.mp4
+```
+
+Download properties:
+
+- Downloader: `yt-dlp`, direct Akamai CDN, no proxy needed
+- Workers: 32 concurrent fragments
+- Fragments: 568
+- Total download time: 4 minutes 53 seconds
+- Average transfer rate: 11.94 MiB/s
+
+Verified properties:
+
+- Video: H.264, 1920x1080, 29.97 fps
+- Audio: AAC
+- Duration: 5599.29 seconds
+- Size: 3,571,427,767 bytes, about 3.4 GiB
+- Bit rate: 5,102,683 bps
+
 ## Operational Commands
 
 Daily download:
 
 ```bash
 python3 tools/download_bloomberg_video.py \
-  --url 'https://www.bloomberg.com/news/videos/2026-06-08/the-china-show-6-8-2026-video'
+  --url 'https://www.bloomberg.com/news/videos/2026-06-09/the-china-show-6-9-26-video'
 ```
 
 Discovery-only dry run:
 
 ```bash
 python3 tools/download_bloomberg_video.py \
-  --url 'https://www.bloomberg.com/news/videos/2026-06-08/the-china-show-6-8-2026-video' \
+  --url 'https://www.bloomberg.com/news/videos/2026-06-09/the-china-show-6-9-26-video' \
   --dry-run \
   --keep-tmp
 ```
@@ -314,7 +359,7 @@ Explicit visible-Chrome fallback:
 
 ```bash
 python3 tools/download_bloomberg_video.py \
-  --url 'https://www.bloomberg.com/news/videos/2026-06-08/the-china-show-6-8-2026-video' \
+  --url 'https://www.bloomberg.com/news/videos/2026-06-09/the-china-show-6-9-26-video' \
   --fetch-mode chrome \
   --dry-run \
   --keep-tmp
@@ -342,8 +387,8 @@ Fetch the preferred metadata manifest by asset ID:
 
 ```bash
 osascript tools/chrome_fetch_text.applescript \
-  'https://www.bloomberg.com/media-manifest/embed?id=479ef363-55bb-4fa0-a489-b58aed39ceb7&variant=LOOP&streamType=HD' \
-  > tmp/master_fetch_2026_06_08_loop_hd.json
+  'https://www.bloomberg.com/media-manifest/embed?id=b13d3699-89f2-401b-bf43-4fd85f10f9dc&variant=LOOP&streamType=HD' \
+  > tmp/master_fetch_2026_06_09_loop_hd.json
 ```
 
 Test a proxy subscription through Google 204:
@@ -393,10 +438,10 @@ ffprobe -v error \
   - Use `--google-doh` first. It resolves proxy hostnames through DNS-over-HTTPS and injects curl `resolve` entries without using Chrome.
   - Use `--chrome-doh` only as a manual legacy fallback.
 
-- Terminal cannot reach Bloomberg/Fastly:
+- Terminal cannot reach Bloomberg or its CDN:
   - Prefer cached URL-to-asset mappings plus Bloomberg `media-manifest/embed`.
   - Use `--fetch-mode chrome` only when page discovery is required and the background paths cannot classify the URL.
-  - Use the normalized proxy path for Fastly HLS segment downloads.
+  - Use the normalized proxy path for Bloomberg CDN HLS segment downloads only after direct CDN download fails.
 
 - Historical Bloomberg page resolves to the wrong episode:
   - Do not trust the first `currentVideo.assetId`.

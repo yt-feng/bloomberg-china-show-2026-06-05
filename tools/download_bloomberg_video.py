@@ -295,6 +295,55 @@ def is_haystack_url(url: str) -> bool:
     return "haystack.tv" in urlsplit(url).netloc.lower()
 
 
+def is_bloomberg_url(url: str) -> bool:
+    host = urlsplit(url).netloc.lower()
+    return host.endswith("bloomberg.com") or host.endswith("bcc.bloomberg.com")
+
+
+def bloomberg_brp_url(url: str) -> str:
+    parsed = urlsplit(url)
+    if not parsed.netloc.lower().endswith("bloomberg.com"):
+        return url
+    return parsed._replace(scheme="https", netloc="brp-prod-bcc.bloomberg.com").geturl()
+
+
+def fetch_text_with_curl(url: str, timeout: int = 90) -> str:
+    try:
+        proc = subprocess.run(
+            [
+                "curl",
+                "--location",
+                "--fail",
+                "--silent",
+                "--show-error",
+                "--http1.1",
+                "--compressed",
+                "--retry",
+                "2",
+                "--retry-delay",
+                "1",
+                "--max-time",
+                str(timeout),
+                "--user-agent",
+                BROWSER_UA,
+                "--header",
+                "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,application/vnd.apple.mpegurl,application/x-mpegURL,application/json,text/plain,*/*;q=0.8",
+                "--header",
+                "Accept-Language: en-US,en;q=0.9",
+                url,
+            ],
+            text=True,
+            capture_output=True,
+            timeout=timeout + 10,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        raise FetchError(f"curl fallback failed: {exc}") from exc
+    if proc.returncode != 0 or not proc.stdout:
+        detail = (proc.stderr or "").strip()
+        raise FetchError(f"curl fallback failed: {detail or proc.returncode}")
+    return proc.stdout
+
+
 def fetch_text_direct(url: str, timeout: int = 90) -> str:
     request = urllib.request.Request(
         url,
@@ -310,7 +359,10 @@ def fetch_text_direct(url: str, timeout: int = 90) -> str:
             charset = response.headers.get_content_charset() or "utf-8"
             return payload.decode(charset, "replace")
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise FetchError(f"Direct fetch failed: {exc}") from exc
+        try:
+            return fetch_text_with_curl(url, timeout=timeout)
+        except FetchError as curl_exc:
+            raise FetchError(f"Direct fetch failed: {exc}; {curl_exc}") from exc
 
 
 def haystack_ids_from_html(text: str) -> list[str]:
@@ -446,6 +498,27 @@ def normalize_probe_text(text: str) -> str:
 
 def normalize_embedded_script_text(text: str) -> str:
     return html.unescape(normalize_probe_text(text)).replace('\\"', '"')
+
+
+def probe_from_html(url: str, text: str, ready: str) -> dict:
+    probe = {
+        "url": url,
+        "title": html_title(text),
+        "ready": ready,
+        "textSample": html_text_sample(text),
+        "scripts": script_texts_from_html(text),
+        "links": re.findall(r'''(?i)(?:href|src)=["']([^"']+)["']''', text),
+        "videos": [],
+        "sources": [],
+        "performance": [],
+        "globals": [],
+        "assetIds": [],
+        "manifestUrls": [],
+        "m3u8Urls": [],
+    }
+    probe["assetIds"] = extract_asset_ids(probe)
+    probe["m3u8Urls"] = extract_hls_urls(probe)
+    return probe
 
 
 def extract_asset_ids(probe: dict) -> list[str]:
@@ -660,23 +733,20 @@ def script_texts_from_html(text: str) -> list[str]:
 def probe_page_via_proxy(url: str, work_dir: Path, fetcher) -> dict:
     log("Fetching Bloomberg page in background via proxy")
     text = fetcher(url, "page_html", timeout=120)
-    probe = {
-        "url": url,
-        "title": html_title(text),
-        "ready": "proxy-fetch",
-        "textSample": html_text_sample(text),
-        "scripts": script_texts_from_html(text),
-        "links": re.findall(r'''(?i)(?:href|src)=["']([^"']+)["']''', text),
-        "videos": [],
-        "sources": [],
-        "performance": [],
-        "globals": [],
-        "assetIds": [],
-        "manifestUrls": [],
-        "m3u8Urls": [],
-    }
-    probe["assetIds"] = extract_asset_ids(probe)
-    probe["m3u8Urls"] = extract_hls_urls(probe)
+    probe = probe_from_html(url, text, "proxy-fetch")
+    (work_dir / "media_probe.json").write_text(json.dumps(probe, indent=2))
+    return probe
+
+
+def probe_page_via_brp(url: str, work_dir: Path) -> dict:
+    brp_url = bloomberg_brp_url(url)
+    log("Fetching Bloomberg page from BRP background endpoint")
+    text = fetch_text_direct(brp_url, timeout=120)
+    if "Are you a robot" in text and "Bloomberg" in text:
+        raise FetchError("BRP endpoint returned the Bloomberg robot page")
+    work_dir.mkdir(parents=True, exist_ok=True)
+    (work_dir / "page_brp.html").write_text(text)
+    probe = probe_from_html(url, text, "brp-direct")
     (work_dir / "media_probe.json").write_text(json.dumps(probe, indent=2))
     return probe
 
@@ -727,30 +797,31 @@ def probe_page_via_headless(url: str, work_dir: Path, proxy: str, *, google_doh:
         if fragments:
             text = "\n".join(html.unescape(re.sub(r"<[^>]+>", "", fragment)) for fragment in fragments)
     (work_dir / "page_headless.html").write_text(text)
-    probe = {
-        "url": url,
-        "title": html_title(text),
-        "ready": "headless-chrome",
-        "textSample": html_text_sample(text),
-        "scripts": script_texts_from_html(text),
-        "links": re.findall(r'''(?i)(?:href|src)=["']([^"']+)["']''', text),
-        "videos": [],
-        "sources": [],
-        "performance": [],
-        "globals": [],
-        "assetIds": [],
-        "manifestUrls": [],
-        "m3u8Urls": [],
-    }
-    probe["assetIds"] = extract_asset_ids(probe)
-    probe["m3u8Urls"] = extract_hls_urls(probe)
+    probe = probe_from_html(url, text, "headless-chrome")
     (work_dir / "media_probe.json").write_text(json.dumps(probe, indent=2))
     return probe
 
 
-def fetch_embed_manifest(asset_id: str, work_dir: Path, fetcher) -> tuple[dict, str]:
+def fetch_embed_manifest_direct(asset_id: str, work_dir: Path) -> tuple[dict, str]:
     url = f"https://www.bloomberg.com/media-manifest/embed?id={asset_id}&variant=LOOP&streamType=HD"
     log(f"Fetching Bloomberg embed manifest for asset {asset_id}")
+    text = fetch_text_direct(url, timeout=90)
+    (work_dir / "embed_manifest.json").write_text(text)
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise FetchError("Direct Bloomberg embed manifest was not valid JSON.") from exc
+    if not isinstance(data, dict):
+        raise FetchError("Direct Bloomberg embed manifest was not a JSON object.")
+    return data, url
+
+
+def fetch_embed_manifest(asset_id: str, work_dir: Path, fetcher) -> tuple[dict, str]:
+    try:
+        return fetch_embed_manifest_direct(asset_id, work_dir)
+    except FetchError as direct_exc:
+        log(f"Direct embed manifest fetch failed; trying current fetcher: {direct_exc}")
+    url = f"https://www.bloomberg.com/media-manifest/embed?id={asset_id}&variant=LOOP&streamType=HD"
     text = fetcher(url, "embed_manifest", timeout=90)
     (work_dir / "embed_manifest.json").write_text(text)
     try:
@@ -944,7 +1015,7 @@ def is_pubads(url: str) -> bool:
 
 def is_bloomberg_delivery(url: str) -> bool:
     host = urlsplit(url).netloc.lower()
-    return "bbgvod" in host or "fastly.net" in host or "bloomberg.com" in host
+    return "bbgvod" in host or "fastly.net" in host or "akamaized.net" in host or "bloomberg.com" in host
 
 
 def select_best_variant(variants: list[Variant]) -> Variant:
@@ -1420,10 +1491,24 @@ def main(argv: list[str] | None = None) -> int:
         probe: dict | None = None
         cached_asset_id = None if args.asset_id else cached_asset_id_for_url(args.url)
         asset_id = args.asset_id or cached_asset_id
-        if args.fetch_mode in {"headless", "proxy"}:
-            subscription = ensure_subscription(args)
-            fetcher, proxy = build_proxy_fetcher(args, subscription, work_dir)
-            if not asset_id:
+
+        def fetcher(url: str, label: str, timeout: int = 90) -> str:
+            del label
+            return fetch_text_direct(url, timeout=timeout)
+
+        if not asset_id and is_bloomberg_url(args.url):
+            try:
+                probe = probe_page_via_brp(args.url, work_dir)
+            except FetchError as exc:
+                log(f"BRP background discovery failed: {exc}")
+            else:
+                brp_asset_ids = extract_asset_ids(probe)
+                asset_id = choose_asset_id(probe, args.url, brp_asset_ids, None)
+
+        if not asset_id:
+            if args.fetch_mode in {"headless", "proxy"}:
+                subscription = ensure_subscription(args)
+                fetcher, proxy = build_proxy_fetcher(args, subscription, work_dir)
                 try:
                     if args.fetch_mode == "headless":
                         probe = probe_page_via_headless(args.url, work_dir, proxy, google_doh=args.google_doh)
@@ -1451,15 +1536,12 @@ def main(argv: list[str] | None = None) -> int:
                             probe = probe_page_via_proxy(args.url, work_dir, fetcher)
                     else:
                         raise
-        else:
-            if not asset_id:
-                open_and_activate(args.url, no_open=args.no_open, page_wait=args.page_wait)
-                probe = probe_page(work_dir, args.probe_retries)
             else:
                 open_and_activate(args.url, no_open=args.no_open, page_wait=args.page_wait)
+                probe = probe_page(work_dir, args.probe_retries)
 
-            def fetcher(url: str, label: str, timeout: int = 90) -> str:
-                return fetch_text_via_chrome(url, work_dir, label, timeout=timeout)
+                def fetcher(url: str, label: str, timeout: int = 90) -> str:
+                    return fetch_text_via_chrome(url, work_dir, label, timeout=timeout)
 
         if probe is None:
             probe = {
@@ -1520,7 +1602,10 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if subscription is None:
-            subscription = ensure_subscription(args)
+            if args.download_backend == "custom":
+                subscription = ensure_subscription(args)
+            else:
+                subscription = resolve_path(args.subscription)
         run_downloader(args, selected, subscription, work_dir, output)
         verify_output(output)
         success = True
