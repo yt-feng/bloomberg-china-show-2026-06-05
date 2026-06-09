@@ -296,27 +296,74 @@ def playlist_cache_key(playlist_url: str) -> str:
     return hashlib.sha256(playlist_url.encode("utf-8")).hexdigest()[:12]
 
 
+def segment_marker(output: Path) -> Path:
+    return output.with_name(output.name + ".ok")
+
+
+def segment_complete(output: Path) -> bool:
+    return output.exists() and output.stat().st_size > 0
+
+
+def cleanup_segment_artifacts(output: Path) -> None:
+    for path in [output, segment_marker(output), *output.parent.glob(output.name + ".tmp.*")]:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+
+
 def download_one(args: tuple[int, str, list[str], str, Path, str]) -> dict[str, object]:
     index, proxy, resolve_entries, url, output, referer = args
-    if output.exists() and output.stat().st_size > 0:
+    marker = segment_marker(output)
+    if segment_complete(output) and marker.exists():
         return {"index": index, "ok": True, "cached": True, "bytes": output.stat().st_size}
+    if segment_complete(output):
+        marker.write_text(str(output.stat().st_size))
+        return {"index": index, "ok": True, "cached": True, "legacy_cached": True, "bytes": output.stat().st_size}
+
+    temp_output = output.with_name(f"{output.name}.tmp.{os.getpid()}.{index}")
+    try:
+        temp_output.unlink()
+    except FileNotFoundError:
+        pass
     cfg = curl_config(
         proxy,
         url,
-        output,
+        temp_output,
         extra=["max-time = 180", "retry = 4", "retry-all-errors"],
         resolve_entries=resolve_entries,
         referer=referer,
     )
-    proc = run_curl_with_config(cfg, timeout=220)
-    ok = proc.returncode == 0 and output.exists() and output.stat().st_size > 0
+    try:
+        proc = run_curl_with_config(cfg, timeout=220)
+        ok = proc.returncode == 0 and temp_output.exists() and temp_output.stat().st_size > 0
+    except subprocess.TimeoutExpired as exc:
+        ok = False
+        returncode: int | str = "timeout"
+        stderr = f"curl timeout after {exc.timeout}s"
+    except Exception as exc:
+        ok = False
+        returncode = exc.__class__.__name__
+        stderr = repr(exc)
+    else:
+        returncode = proc.returncode
+        stderr = proc.stderr[-300:] if proc.stderr else ""
+
+    if ok:
+        temp_output.replace(output)
+        marker.write_text(str(output.stat().st_size))
+    else:
+        try:
+            temp_output.unlink()
+        except FileNotFoundError:
+            pass
     return {
         "index": index,
         "ok": ok,
         "cached": False,
         "bytes": output.stat().st_size if output.exists() else 0,
-        "returncode": proc.returncode,
-        "stderr": proc.stderr[-300:] if proc.stderr else "",
+        "returncode": returncode,
+        "stderr": stderr,
     }
 
 
@@ -329,6 +376,7 @@ def download_segments(
     chrome_doh: bool,
     google_doh: bool,
     referer: str,
+    rounds: int = 3,
 ) -> Path:
     text = playlist_path.read_text(errors="ignore")
     if "#EXT-X-KEY" in text.upper():
@@ -356,59 +404,141 @@ def download_segments(
     local_playlist = out_dir / f"local_video_{cache_key}.m3u8"
     local_playlist.write_text("\n".join(local_lines) + "\n")
 
-    print(f"Downloading {len(tasks)} segments with {workers} workers", flush=True)
-    failures: list[dict[str, object]] = []
-    completed = 0
-    cached = 0
-    total_bytes = 0
-    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = [pool.submit(download_one, task) for task in tasks]
-        for future in concurrent.futures.as_completed(futures):
-            result = future.result()
-            completed += 1
-            total_bytes += int(result.get("bytes") or 0)
-            if result.get("cached"):
-                cached += 1
-            if not result["ok"]:
-                failures.append(result)
-            if completed % 25 == 0 or completed == len(tasks):
-                print(
-                    f"  {completed}/{len(tasks)} segments, "
-                    f"{total_bytes / 1024 / 1024:.1f} MiB, "
-                    f"{cached} cached, {len(failures)} failed",
-                    flush=True,
-                )
+    max_rounds = max(1, rounds)
+    task_by_index = {task[0]: task for task in tasks}
+    pending = tasks
+    last_failures: list[dict[str, object]] = []
+    for round_no in range(1, max_rounds + 1):
+        print(
+            f"Downloading {len(pending)} segments with {workers} workers "
+            f"(round {round_no}/{max_rounds})",
+            flush=True,
+        )
+        failures: list[dict[str, object]] = []
+        completed = 0
+        cached = 0
+        total_bytes = 0
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {pool.submit(download_one, task): task for task in pending}
+            for future in concurrent.futures.as_completed(futures):
+                task = futures[future]
+                try:
+                    result = future.result()
+                except Exception as exc:
+                    result = {
+                        "index": task[0],
+                        "ok": False,
+                        "cached": False,
+                        "bytes": 0,
+                        "returncode": exc.__class__.__name__,
+                        "stderr": repr(exc),
+                    }
+                    cleanup_segment_artifacts(task[4])
+                completed += 1
+                total_bytes += int(result.get("bytes") or 0)
+                if result.get("cached"):
+                    cached += 1
+                if not result["ok"]:
+                    failures.append(result)
+                if completed % 25 == 0 or completed == len(pending):
+                    print(
+                        f"  {completed}/{len(pending)} segments, "
+                        f"{total_bytes / 1024 / 1024:.1f} MiB, "
+                        f"{cached} cached, {len(failures)} failed",
+                        flush=True,
+                    )
 
-    if failures:
-        fail_path = out_dir / "segment_failures.json"
-        fail_path.write_text(json.dumps(failures, indent=2))
-        raise SystemExit(f"{len(failures)} segment downloads failed; see {fail_path}")
+        missing = [task for task in tasks if not segment_complete(task[4])]
+        if not failures and not missing:
+            return local_playlist
+        if not missing:
+            for task in tasks:
+                marker = segment_marker(task[4])
+                if not marker.exists():
+                    marker.write_text(str(task[4].stat().st_size))
+            return local_playlist
 
-    return local_playlist
+        last_failures = failures or [
+            {
+                "index": task[0],
+                "ok": False,
+                "cached": False,
+                "bytes": 0,
+                "returncode": "missing",
+                "stderr": "",
+            }
+            for task in missing
+        ]
+        for failure in last_failures:
+            task = task_by_index.get(int(failure.get("index", -1)))
+            if task:
+                cleanup_segment_artifacts(task[4])
+        pending = missing
+        if round_no < max_rounds:
+            time.sleep(min(2 * round_no, 8))
+
+    fail_path = out_dir / "segment_failures.json"
+    fail_path.write_text(json.dumps(last_failures, indent=2))
+    raise SystemExit(f"{len(last_failures)} segment downloads failed after {max_rounds} rounds; see {fail_path}")
 
 
 def remux(local_playlist: Path, output_mp4: Path) -> None:
     output_mp4.parent.mkdir(parents=True, exist_ok=True)
-    cmd = [
+    temp_output = output_mp4.with_name(output_mp4.name + ".remuxing.mp4")
+    base = [
         "ffmpeg",
         "-nostdin",
         "-hide_banner",
         "-loglevel",
         "warning",
-        "-n",
+        "-y",
         "-allowed_extensions",
         "ALL",
-        "-i",
-        str(local_playlist),
-        "-c",
-        "copy",
-        "-bsf:a",
-        "aac_adtstoasc",
-        "-movflags",
-        "+faststart",
-        str(output_mp4),
+        "-protocol_whitelist",
+        "file,http,https,tcp,tls,crypto",
     ]
-    subprocess.run(cmd, check=True)
+    attempts = [
+        [
+            *base,
+            "-i",
+            str(local_playlist),
+            "-c",
+            "copy",
+            "-bsf:a",
+            "aac_adtstoasc",
+            "-movflags",
+            "+faststart",
+            str(temp_output),
+        ],
+        [
+            *base,
+            "-fflags",
+            "+genpts+discardcorrupt",
+            "-err_detect",
+            "ignore_err",
+            "-i",
+            str(local_playlist),
+            "-c",
+            "copy",
+            "-movflags",
+            "+faststart",
+            str(temp_output),
+        ],
+    ]
+    last_error = ""
+    for index, cmd in enumerate(attempts, start=1):
+        try:
+            temp_output.unlink()
+        except FileNotFoundError:
+            pass
+        proc = subprocess.run(cmd, text=True, capture_output=True)
+        if proc.returncode == 0 and temp_output.exists() and temp_output.stat().st_size > 0:
+            temp_output.replace(output_mp4)
+            return
+        last_error = (proc.stderr or proc.stdout or "").strip()
+        if index == 1:
+            print("Strict remux failed; retrying with corrupt packet discard", flush=True)
+    raise SystemExit(f"ffmpeg remux failed: {last_error[-800:]}")
 
 
 def main() -> int:
@@ -419,6 +549,7 @@ def main() -> int:
     parser.add_argument("--work-dir", type=Path, default=Path("tmp/hls_work"))
     parser.add_argument("--output", type=Path, default=Path("downloads/the_china_show_2026_06_05.mp4"))
     parser.add_argument("--workers", type=int, default=16)
+    parser.add_argument("--segment-rounds", type=int, default=3)
     parser.add_argument("--test-only", action="store_true")
     parser.add_argument("--chrome-doh", action="store_true")
     parser.add_argument("--google-doh", action="store_true")
@@ -475,6 +606,7 @@ def main() -> int:
         args.chrome_doh,
         args.google_doh,
         args.referer,
+        args.segment_rounds,
     )
     remux(local_playlist, args.output)
     print(f"Wrote {args.output}", flush=True)

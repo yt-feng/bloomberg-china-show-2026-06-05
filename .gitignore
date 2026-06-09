@@ -2,4 +2,7 @@
 tmp/
 downloads/*.mp4
 downloads/*.part
+downloads/*.part-*
+downloads/*.ytdl
+downloads/*.remuxing.mp4
 *.log

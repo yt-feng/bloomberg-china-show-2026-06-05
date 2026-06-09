@@ -46,6 +46,8 @@ BROWSER_UA = (
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/137.0.0.0 Safari/537.36"
 )
+MANIFEST_FETCH_TIMEOUT = 35
+HLS_FETCH_TIMEOUT = 45
 
 
 class FetchError(RuntimeError):
@@ -322,8 +324,16 @@ def fetch_text_with_curl(url: str, timeout: int = 90) -> str:
                 "2",
                 "--retry-delay",
                 "1",
+                "--retry-max-time",
+                str(timeout),
+                "--connect-timeout",
+                str(min(15, max(5, timeout // 3))),
                 "--max-time",
                 str(timeout),
+                "--speed-time",
+                str(min(20, max(5, timeout // 2))),
+                "--speed-limit",
+                "1",
                 "--user-agent",
                 BROWSER_UA,
                 "--header",
@@ -337,14 +347,23 @@ def fetch_text_with_curl(url: str, timeout: int = 90) -> str:
             timeout=timeout + 10,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
-        raise FetchError(f"curl fallback failed: {exc}") from exc
+        raise FetchError(f"curl fetch failed: {exc}") from exc
     if proc.returncode != 0 or not proc.stdout:
         detail = (proc.stderr or "").strip()
-        raise FetchError(f"curl fallback failed: {detail or proc.returncode}")
+        raise FetchError(f"curl fetch failed: {detail or proc.returncode}")
     return proc.stdout
 
 
 def fetch_text_direct(url: str, timeout: int = 90) -> str:
+    curl_error = ""
+    try:
+        return fetch_text_with_curl(url, timeout=timeout)
+    except FetchError as curl_exc:
+        curl_error = str(curl_exc)
+        curl_message = curl_error.lower()
+        if "timed out" in curl_message or "timeout" in curl_message:
+            raise FetchError(f"Direct fetch timed out: {curl_exc}") from curl_exc
+
     request = urllib.request.Request(
         url,
         headers={
@@ -359,10 +378,7 @@ def fetch_text_direct(url: str, timeout: int = 90) -> str:
             charset = response.headers.get_content_charset() or "utf-8"
             return payload.decode(charset, "replace")
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        try:
-            return fetch_text_with_curl(url, timeout=timeout)
-        except FetchError as curl_exc:
-            raise FetchError(f"Direct fetch failed: {exc}; {curl_exc}") from exc
+        raise FetchError(f"Direct fetch failed: {curl_error}; urllib failed: {exc}") from exc
 
 
 def haystack_ids_from_html(text: str) -> list[str]:
@@ -674,7 +690,7 @@ def fetch_text_via_proxy(
         extra=[
             "http1.1",
             "compressed",
-            "max-time = 180",
+            f"max-time = {timeout}",
             f'user-agent = "{BROWSER_UA}"',
             'header = "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,application/vnd.apple.mpegurl,application/x-mpegURL,text/plain,*/*;q=0.8"',
             'header = "Accept-Language: en-US,en;q=0.9"',
@@ -805,7 +821,7 @@ def probe_page_via_headless(url: str, work_dir: Path, proxy: str, *, google_doh:
 def fetch_embed_manifest_direct(asset_id: str, work_dir: Path) -> tuple[dict, str]:
     url = f"https://www.bloomberg.com/media-manifest/embed?id={asset_id}&variant=LOOP&streamType=HD"
     log(f"Fetching Bloomberg embed manifest for asset {asset_id}")
-    text = fetch_text_direct(url, timeout=90)
+    text = fetch_text_direct(url, timeout=MANIFEST_FETCH_TIMEOUT)
     (work_dir / "embed_manifest.json").write_text(text)
     try:
         data = json.loads(text)
@@ -816,13 +832,23 @@ def fetch_embed_manifest_direct(asset_id: str, work_dir: Path) -> tuple[dict, st
     return data, url
 
 
-def fetch_embed_manifest(asset_id: str, work_dir: Path, fetcher) -> tuple[dict, str]:
-    try:
-        return fetch_embed_manifest_direct(asset_id, work_dir)
-    except FetchError as direct_exc:
-        log(f"Direct embed manifest fetch failed; trying current fetcher: {direct_exc}")
+def fetch_embed_manifest(
+    asset_id: str,
+    work_dir: Path,
+    fetcher,
+    fetcher_kind: str,
+    *,
+    try_direct_first: bool = True,
+) -> tuple[dict, str]:
     url = f"https://www.bloomberg.com/media-manifest/embed?id={asset_id}&variant=LOOP&streamType=HD"
-    text = fetcher(url, "embed_manifest", timeout=90)
+    if try_direct_first:
+        try:
+            return fetch_embed_manifest_direct(asset_id, work_dir)
+        except FetchError as direct_exc:
+            if fetcher_kind == "direct":
+                raise
+            log(f"Direct embed manifest fetch failed; trying current fetcher: {direct_exc}")
+    text = fetcher(url, "embed_manifest", timeout=MANIFEST_FETCH_TIMEOUT)
     (work_dir / "embed_manifest.json").write_text(text)
     try:
         data = json.loads(text)
@@ -968,7 +994,7 @@ def discover_variants(urls: list[str], work_dir: Path, fetcher) -> list[Variant]
     for index, url in enumerate(urls, start=1):
         try:
             log(f"Fetching HLS candidate {index}/{len(urls)}")
-            text = fetcher(url, f"hls_{index:02d}", timeout=90)
+            text = fetcher(url, f"hls_{index:02d}", timeout=HLS_FETCH_TIMEOUT)
         except FetchError as exc:
             if looks_like_direct_variant(url):
                 width, height, bandwidth = quality_from_url(url)
@@ -1169,12 +1195,25 @@ def yt_dlp_base_command(args: argparse.Namespace) -> list[str] | None:
     if binary:
         return [binary]
 
-    probe = subprocess.run(
-        [sys.executable, "-m", "yt_dlp", "--version"],
-        text=True,
-        capture_output=True,
-        timeout=20,
-    )
+    for candidate in [
+        ROOT / ".venv/bin/yt-dlp",
+        Path.home() / ".local/bin/yt-dlp",
+        Path("/opt/homebrew/bin/yt-dlp"),
+        Path("/usr/local/bin/yt-dlp"),
+        Path("/private/tmp/bbg-ytdlp-venv/bin/yt-dlp"),
+    ]:
+        if candidate.exists() and os.access(candidate, os.X_OK):
+            return [str(candidate)]
+
+    try:
+        probe = subprocess.run(
+            [sys.executable, "-m", "yt_dlp", "--version"],
+            text=True,
+            capture_output=True,
+            timeout=20,
+        )
+    except (subprocess.SubprocessError, OSError):
+        return None
     if probe.returncode == 0:
         return [sys.executable, "-m", "yt_dlp"]
     return None
@@ -1184,6 +1223,21 @@ def yt_dlp_output_template(output: Path) -> str:
     if output.suffix:
         return str(output.with_suffix(".%(ext)s"))
     return str(output) + ".%(ext)s"
+
+
+def cleanup_ytdlp_partials(output: Path) -> None:
+    for pattern in [
+        output.name + ".part",
+        output.name + ".part-*",
+        output.name + ".ytdl",
+        output.with_suffix(".part").name,
+        output.with_suffix(".part").name + "-*",
+    ]:
+        for path in output.parent.glob(pattern):
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                pass
 
 
 def cached_proxy_for_download(args: argparse.Namespace, work_dir: Path) -> str | None:
@@ -1204,10 +1258,12 @@ def run_ytdlp_process(cmd: list[str], *, output: Path) -> bool:
         return False
     if proc.returncode != 0:
         log(f"yt-dlp exited with status {proc.returncode}")
+        cleanup_ytdlp_partials(output)
         return False
     if output.exists() and output.stat().st_size > 0:
         return True
     log(f"yt-dlp finished but expected output was not found: {rel(output)}")
+    cleanup_ytdlp_partials(output)
     return False
 
 
@@ -1302,6 +1358,8 @@ def run_segmented_downloader(
         str(output),
         "--workers",
         str(args.workers),
+        "--segment-rounds",
+        str(args.segment_rounds),
         "--google-doh",
         "--referer",
         args.url,
@@ -1401,6 +1459,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--proxy-test-url", help=f"URL used when scanning subscription nodes. Defaults to {DEFAULT_PROXY_TEST_URL}.")
     parser.add_argument("--google-doh", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--workers", type=int, default=32)
+    parser.add_argument("--segment-rounds", type=int, default=3, help="Fallback downloader retry rounds for missing or failed HLS segments.")
     parser.add_argument("--download-backend", choices=("auto", "yt-dlp", "custom"), default="auto")
     parser.add_argument("--yt-dlp-bin", help="Path to yt-dlp. Defaults to YTDLP_BIN, PATH, then python -m yt_dlp.")
     parser.add_argument("--yt-dlp-proxy-mode", choices=("auto", "never", "always"), default="auto")
@@ -1492,6 +1551,8 @@ def main(argv: list[str] | None = None) -> int:
         cached_asset_id = None if args.asset_id else cached_asset_id_for_url(args.url)
         asset_id = args.asset_id or cached_asset_id
 
+        fetcher_kind = "direct"
+
         def fetcher(url: str, label: str, timeout: int = 90) -> str:
             del label
             return fetch_text_direct(url, timeout=timeout)
@@ -1509,6 +1570,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.fetch_mode in {"headless", "proxy"}:
                 subscription = ensure_subscription(args)
                 fetcher, proxy = build_proxy_fetcher(args, subscription, work_dir)
+                fetcher_kind = "proxy"
                 try:
                     if args.fetch_mode == "headless":
                         probe = probe_page_via_headless(args.url, work_dir, proxy, google_doh=args.google_doh)
@@ -1530,6 +1592,7 @@ def main(argv: list[str] | None = None) -> int:
                                 timeout=timeout,
                             )
 
+                        fetcher_kind = "proxy"
                         if args.fetch_mode == "headless":
                             probe = probe_page_via_headless(args.url, work_dir, proxy, google_doh=args.google_doh)
                         else:
@@ -1542,6 +1605,8 @@ def main(argv: list[str] | None = None) -> int:
 
                 def fetcher(url: str, label: str, timeout: int = 90) -> str:
                     return fetch_text_via_chrome(url, work_dir, label, timeout=timeout)
+
+                fetcher_kind = "chrome"
 
         if probe is None:
             probe = {
@@ -1580,10 +1645,26 @@ def main(argv: list[str] | None = None) -> int:
         candidates: list[str] = []
         if asset_id:
             try:
-                manifest, _manifest_url = fetch_embed_manifest(asset_id, work_dir, fetcher)
+                manifest, _manifest_url = fetch_embed_manifest(asset_id, work_dir, fetcher, fetcher_kind)
                 candidates.extend(hls_urls_from_manifest(manifest))
             except FetchError as exc:
                 log(f"Embed manifest fetch failed; falling back to page resources: {exc}")
+                if fetcher_kind == "direct" and args.fetch_mode in {"headless", "proxy"}:
+                    try:
+                        log("Trying embed manifest through proxy fallback")
+                        subscription = ensure_subscription(args)
+                        fetcher, _proxy = build_proxy_fetcher(args, subscription, work_dir)
+                        fetcher_kind = "proxy"
+                        manifest, _manifest_url = fetch_embed_manifest(
+                            asset_id,
+                            work_dir,
+                            fetcher,
+                            fetcher_kind,
+                            try_direct_first=False,
+                        )
+                        candidates.extend(hls_urls_from_manifest(manifest))
+                    except (FetchError, SystemExit) as proxy_exc:
+                        log(f"Proxy embed manifest fallback failed; falling back to page resources: {proxy_exc}")
         candidates.extend(extract_hls_urls(probe))
         candidates = list(dict.fromkeys(candidates))
         if not candidates:

@@ -41,7 +41,10 @@ The workflow should interrupt the operator only when the URL cannot be classifie
   - Uses `tmp/proxy_sub.raw` and `tmp/working_proxy.url` so repeated runs do not need subscription input or full proxy rescans.
   - Defaults to non-invasive discovery. It only uses the visible Chrome/AppleScript path when `--fetch-mode chrome` is explicitly supplied.
   - Defaults to 32 HLS fragment workers, matching the fastest verified local run.
-  - For `yt-dlp`, reads `YTDLP_BIN`, `PATH`, or `python -m yt_dlp`. The repo records this dependency in `requirements.txt`.
+  - For `yt-dlp`, reads `YTDLP_BIN`, `PATH`, common local install paths, or `python -m yt_dlp`. The repo records this dependency in `requirements.txt`.
+  - Cleans failed `yt-dlp` partial files before falling back to the segmented downloader, so a near-complete failed run does not poison the next attempt.
+  - Fetches small text resources such as embed manifests and HLS playlists through bounded `curl --max-time` requests before falling back to `urllib`, so a stalled terminal connection fails clearly instead of hanging the one-command flow.
+  - If a cached or overridden `assetId` is available but direct embed-manifest fetch fails, automatically tries the same embed manifest through the cached/scanned proxy before falling back to page resource candidates.
   - Also accepts direct `.m3u8` URLs and Haystack mirror pages. Those paths skip Bloomberg page discovery and go straight to HLS selection/download.
 
 - `tools/activate_bloomberg_tab.applescript`
@@ -70,10 +73,14 @@ The workflow should interrupt the operator only when the URL cannot be classifie
   - Tests proxies with an HTTP endpoint.
   - Reuses a cached working proxy when one is provided.
   - Downloads HLS segments concurrently.
+  - Writes each segment to a temporary file, then atomically replaces the final segment path only after curl succeeds.
+  - Marks completed segment files with `.ok` sidecars while still accepting older non-empty cached segments.
   - Stores segment caches under a playlist-URL hash, so an interrupted wrong-source run cannot be reused for a different HLS playlist.
+  - Retries only missing or failed segments for multiple rounds before writing `segment_failures.json`.
   - Reports segment progress by actual completion order, so one slow early segment does not hide the rest of the active downloads.
   - Refuses encrypted HLS playlists containing `#EXT-X-KEY`.
-  - Remuxes the local HLS playlist into MP4 with `ffmpeg -c copy`.
+  - Remuxes into a temporary MP4 first, then atomically replaces the final output after success.
+  - Tries strict `ffmpeg -c copy` remux first, then retries with corrupt-packet discard for isolated bad AAC packets.
 
 ## Preferred Data Flow
 
@@ -94,7 +101,7 @@ Internally, the script performs these steps:
 6. If no cached mapping exists, attempt non-invasive discovery first through `https://brp-prod-bcc.bloomberg.com/...`. This backend route can return the same Next.js/RSC metadata while avoiding the normal `www.bloomberg.com` robot page from terminal/headless clients.
 7. If BRP discovery fails or is transiently unavailable, fall back to the background proxy and isolated-headless paths. Visible Chrome is reserved for explicit `--fetch-mode chrome` fallback.
 8. When Bloomberg page discovery is required, prefer a playlist item `assetID` whose `url` matches the requested Bloomberg path. This matters for older episode pages because Bloomberg can render a current/recommended video in `currentVideo` while the requested historical episode appears in `playlistItems`.
-9. Fetch Bloomberg's own media metadata directly first:
+9. Fetch Bloomberg's own media metadata directly first, using a bounded manifest timeout. In the default headless/direct mode, a failed direct embed fetch is not repeated through the same direct fetcher. If an `assetId` is known and direct manifest fetch fails, the orchestrator tries the proxy fetcher before falling back to page resource candidates. Proxy and Chrome fetchers still get their normal second chance when explicitly selected.
 
 ```text
 https://www.bloomberg.com/media-manifest/embed?id=<assetId>&variant=LOOP&streamType=HD
@@ -103,7 +110,7 @@ https://www.bloomberg.com/media-manifest/embed?id=<assetId>&variant=LOOP&streamT
 10. From that JSON, prefer `streams[].url` pointing to Bloomberg `media-manifest/videos/LOOP/HD/...m3u8`.
 11. Fetch the LOOP/HD master manifest directly first and expand it to the final CDN media playlist. Bloomberg has used both Fastly and Akamai hosts; both `bbgvod-...fastly.net` and `bbgvod-...akamaized.net` are treated as first-party Bloomberg delivery.
 12. Select the highest useful Bloomberg delivery variant, typically `FHD5000.m3u8`, while deprioritizing `pubads.g.doubleclick.net` DAI playlists.
-13. Try `yt-dlp` first when available. The orchestrator passes the already-selected final CDN HLS variant, `--concurrent-fragments <workers>`, retry settings, Bloomberg Referer, browser User-Agent, and an MP4 output template. The default worker count is 32. In default `--yt-dlp-proxy-mode auto`, it tries direct CDN download first because the final HLS segments are often globally reachable.
+13. Try `yt-dlp` first when available. The orchestrator passes the already-selected final CDN HLS variant, `--concurrent-fragments <workers>`, retry settings, Bloomberg Referer, browser User-Agent, and an MP4 output template. The default worker count is 32. In default `--yt-dlp-proxy-mode auto`, it tries direct CDN download first because the final HLS segments are often globally reachable. If `yt-dlp` exits non-zero or does not create the expected MP4, the orchestrator removes matching `.part` and `.ytdl` residues before trying the next backend.
 14. If direct `yt-dlp` download fails and a cached working proxy is available with `http` or `https`, the orchestrator starts a local `127.0.0.1` proxy forwarder and passes that local URL to `yt-dlp`. This avoids exposing upstream proxy credentials in the `yt-dlp` process arguments.
 15. If `yt-dlp` is unavailable or exits non-zero in `--download-backend auto` mode, fall back to `proxy_hls_downloader.py` with `--google-doh`, the selected HLS variant, and the original Bloomberg URL as the HTTP Referer.
 16. The fallback downloader:
@@ -113,8 +120,10 @@ https://www.bloomberg.com/media-manifest/embed?id=<assetId>&variant=LOOP&streamT
    - tries the cached working proxy first when available,
    - tests the proxy path,
    - downloads all `.ts` segments with a worker pool,
+   - records successful segments with `.ok` markers,
+   - retries missing or failed segments for `--segment-rounds` rounds,
    - writes a local `.m3u8`,
-   - remuxes to MP4.
+   - remuxes to MP4 with a strict pass, then a corrupt-packet-tolerant pass if needed.
 17. Verify the MP4 with `ffprobe`.
 18. Delete the per-video work directory unless `--keep-tmp` is set. The final MP4, cached subscription, and cached working proxy remain local and ignored by git.
 
@@ -232,6 +241,44 @@ The 2026-06-08 page initially exposed a `pubads.g.doubleclick.net/ondemand/hls/.
 The download itself also looked more stalled than it was because the downloader consumed futures with `pool.map`, which returns results in input order. One slow early segment could block progress printing even while later segments were already downloaded. This is now fixed by consuming futures with `as_completed`.
 
 ## Known Runs
+
+Target page:
+
+```text
+https://www.bloomberg.com/news/videos/2026-05-27/the-china-show-5-27-2026-video
+```
+
+Asset ID:
+
+```text
+d75c72e1-0001-49ce-8ee9-4ce59c629e52
+```
+
+Selected 1080p HLS variant:
+
+```text
+https://bbgvod-s3-us-east1-zenko.global.ssl.fastly.net/vod/m/MTAyMzk2Nzk/Q2xvdWRfMTQwNzQzMw/TCS05272026v2/TCS05272026v2FHD5000.m3u8
+```
+
+Final output:
+
+```text
+downloads/the_china_show_2026_05_27_1080p.mp4
+```
+
+Download notes:
+
+- `yt-dlp` direct Fastly download reached the tail of the file and then failed with connection errors and skipped fragments.
+- The built-in fallback downloader completed all 559 segments after retrying failures.
+- Strict remux hit an isolated corrupt AAC packet; the corrupt-packet-tolerant remux path produced the final MP4.
+
+Verified properties:
+
+- Video: H.264, 1920x1080
+- Audio: AAC
+- Duration: 5513.31 seconds
+- Size: 3,515,773,239 bytes, about 3.3 GiB
+- Bit rate: 5,101,508 bps
 
 Target page:
 
@@ -479,7 +526,7 @@ ffprobe -v error \
 
 - Keep proxy subscription files under `tmp/`.
 - Keep downloaded media under `downloads/`.
-- `.gitignore` excludes `tmp/`, `downloads/*.mp4`, `.DS_Store`, partial files, and logs.
+- `.gitignore` excludes `tmp/`, `downloads/*.mp4`, `.DS_Store`, `yt-dlp` partials, remux temp files, and logs.
 - Do not paste or commit decoded subscription contents, proxy credentials, HLS segment caches, or full media files.
 - Commit only helper scripts, documentation, and non-sensitive configuration.
 
@@ -493,6 +540,13 @@ ffprobe -v error \
   - Prefer cached URL-to-asset mappings plus Bloomberg `media-manifest/embed`.
   - Use `--fetch-mode chrome` only when page discovery is required and the background paths cannot classify the URL.
   - Use the normalized proxy path for Bloomberg CDN HLS segment downloads only after direct CDN download fails.
+  - Small manifest and playlist fetches use bounded `curl --max-time` requests, so this failure should surface as a `FetchError` rather than an indefinitely quiet command.
+  - If direct embed-manifest fetch fails while an `assetId` is already known, the orchestrator tries the proxy manifest path automatically.
+
+- `yt-dlp` fails near the tail of a large HLS download:
+  - The orchestrator removes matching `.part` and `.ytdl` files before trying the next backend.
+  - In `--download-backend auto`, it falls back to the built-in segmented downloader instead of asking for manual cleanup.
+  - Keep `--yt-dlp-proxy-mode auto`; direct CDN is still the fastest path when it succeeds, and proxy mode remains a fallback.
 
 - Historical Bloomberg page resolves to the wrong episode:
   - Do not trust the first `currentVideo.assetId`.
@@ -503,8 +557,15 @@ ffprobe -v error \
   - Stop and inspect. Do not attempt DRM or protected-content bypass.
 
 - Some segments fail:
-  - The downloader writes `segment_failures.json` under the work directory.
-  - Re-running the same command reuses already downloaded non-empty segment files.
+  - Each segment downloads to a temp file and is moved into place only after curl succeeds.
+  - The fallback downloader retries only missing or failed segments for `--segment-rounds` rounds. The default is 3.
+  - If all rounds fail, the downloader writes `segment_failures.json` under the work directory.
+  - Re-running the same command reuses already downloaded non-empty segment files and adds `.ok` markers for older caches.
+
+- Remux fails on an isolated corrupt AAC packet:
+  - The fallback downloader first tries strict stream copy remux.
+  - If strict remux fails, it retries with `-fflags +genpts+discardcorrupt -err_detect ignore_err`.
+  - Both attempts write to `<output>.remuxing.mp4` and replace the final MP4 only after success.
 
 - Progress output appears idle:
   - Older downloader revisions printed results in playlist order, so a slow early segment hid later completed segments.

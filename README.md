@@ -15,7 +15,7 @@ python3 tools/download_bloomberg_video.py \
   --url 'https://www.bloomberg.com/news/videos/2026-06-09/the-china-show-6-9-26-video'
 ```
 
-The script resolves the Bloomberg asset ID, fetches Bloomberg's media manifest directly, selects the best non-ad HLS variant, downloads it with `yt-dlp` when available, falls back to the proxy-backed downloader only if needed, remuxes to MP4, verifies the output with `ffprobe`, and cleans the temporary work directory.
+The script resolves the Bloomberg asset ID, fetches Bloomberg's media manifest directly, selects the best non-ad HLS variant, downloads it with `yt-dlp` when available, falls back to the proxy-backed downloader only if needed, remuxes to MP4, verifies the output with `ffprobe`, and cleans the temporary work directory. The fallback downloader retries failed segments by round and writes the final MP4 atomically after remux succeeds.
 
 It also accepts direct HLS and Haystack mirror URLs:
 
@@ -27,7 +27,7 @@ python3 tools/download_bloomberg_video.py \
   --url 'https://www.haystack.tv/v/ray-dalio-ai-bubble-burst-wealth-converts-money'
 ```
 
-Default discovery is non-invasive: it reuses cached URL-to-asset mappings when available, otherwise uses Bloomberg's BRP background endpoint, then fetches the embed manifest and CDN playlist directly. The foreground Chrome browser is used only when explicitly requested with `--fetch-mode chrome`.
+Default discovery is non-invasive: it reuses cached URL-to-asset mappings when available, otherwise uses Bloomberg's BRP background endpoint, then fetches the embed manifest and CDN playlist directly. If direct embed-manifest fetch fails and a proxy is configured, the script tries the proxy path automatically. The foreground Chrome browser is used only when explicitly requested with `--fetch-mode chrome`.
 
 One-time local proxy setup:
 
@@ -37,7 +37,7 @@ printf '%s\n' '<proxy subscription URL>' > tmp/proxy_subscription_url.txt
 chmod 600 tmp/proxy_subscription_url.txt
 ```
 
-`tmp/` and `downloads/*.mp4` are ignored by git. Do not commit proxy subscriptions, decoded proxy nodes, segment caches, or downloaded video files.
+`tmp/`, downloaded MP4 files, partial download files, and remux temp files are ignored by git. Do not commit proxy subscriptions, decoded proxy nodes, segment caches, or downloaded video files.
 
 Useful switches:
 
@@ -46,12 +46,14 @@ Useful switches:
 - `--keep-tmp`: keep probe JSON, manifests, playlists, and segment work files.
 - `--force`: replace an existing output file.
 - `--workers 32`: control concurrent segment downloads.
+- `--segment-rounds 3`: control fallback retry rounds for missing or failed HLS segments.
 - `--download-backend auto|yt-dlp|custom`: default `auto` tries `yt-dlp` first and falls back to the built-in downloader.
 - `--yt-dlp-proxy-mode auto|never|always`: default `auto` tries direct CDN download first, then uses the cached proxy through a local credential-hiding forwarder if direct download fails.
 
 Known downloaded outputs:
 
 - `downloads/the_china_show_2026_06_05_1080p.mp4`
+- `downloads/the_china_show_2026_05_27_1080p.mp4`
 - `downloads/the_china_show_2026_06_04_1080p.mp4`
 - `downloads/the_china_show_2026_06_08_1080p.mp4`
 - `downloads/the_china_show_6_9_26_2026_06_09_1080p.mp4`
