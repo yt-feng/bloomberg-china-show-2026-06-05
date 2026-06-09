@@ -1,12 +1,36 @@
 # Architecture
 
-This repository preserves the repeatable code path used to download Bloomberg videos through a local proxy subscription. The current default path avoids using the user's foreground Chrome browser; the older Chrome/AppleScript path remains as an explicit fallback.
+This repository preserves the repeatable, direct-first, headless/background code path used to download Bloomberg videos. The normal path does not use the user's foreground Chrome browser and does not require the proxy subscription; proxy and Chrome paths remain explicit fallbacks for hostile network conditions or page-shape changes.
 
 ## Scope
 
 The workflow downloads public HLS media URLs exposed by Bloomberg's own media manifests. It does not bypass DRM, paywall checks, or encrypted streams. If a future page exposes only DRM-protected media, this workflow should stop rather than attempt circumvention.
 
 Large media outputs and temporary proxy material are intentionally excluded from git.
+
+## Target Operating Mode
+
+The target operator experience is:
+
+```bash
+python3 tools/download_bloomberg_video.py --url '<Bloomberg video URL>'
+```
+
+That single command should resolve the page, choose the best first-party Bloomberg HLS stream, download the MP4, verify it, and exit. The operator should not need to approve browser automation, proxy scans, manual manifest probing, or repeated shell commands during the normal path.
+
+Default behavior is tuned around the fastest verified 2026-06-09 path:
+
+1. Run fully in the background.
+2. Reuse a cached URL-to-asset mapping if available.
+3. Otherwise fetch the Bloomberg page metadata from the BRP background endpoint.
+4. Fetch Bloomberg's `media-manifest/embed` JSON directly.
+5. Expand the LOOP/HD master playlist to a first-party Bloomberg CDN media playlist.
+6. Prefer `FHD5000.m3u8` from Bloomberg delivery hosts such as Fastly or Akamai.
+7. Download with `yt-dlp` using 32 concurrent fragments.
+8. Try direct CDN download before any proxy path.
+9. Verify the output with `ffprobe`.
+
+The workflow should interrupt the operator only when the URL cannot be classified, the selected stream is encrypted/DRM-protected, required runtime dependencies are missing, or the environment lacks network access to both Bloomberg and the configured fallback proxy.
 
 ## Components
 
@@ -16,6 +40,7 @@ Large media outputs and temporary proxy material are intentionally excluded from
   - Reuses cached URL-to-asset mappings when available, tries Bloomberg's BRP background endpoint for page metadata, fetches Bloomberg's `embed` manifest directly first, selects the best HLS variant, prefers `yt-dlp` for HLS download/remux, falls back to proxy-backed download paths only when needed, verifies the MP4, and cleans temporary work files.
   - Uses `tmp/proxy_sub.raw` and `tmp/working_proxy.url` so repeated runs do not need subscription input or full proxy rescans.
   - Defaults to non-invasive discovery. It only uses the visible Chrome/AppleScript path when `--fetch-mode chrome` is explicitly supplied.
+  - Defaults to 32 HLS fragment workers, matching the fastest verified local run.
   - For `yt-dlp`, reads `YTDLP_BIN`, `PATH`, or `python -m yt_dlp`. The repo records this dependency in `requirements.txt`.
   - Also accepts direct `.m3u8` URLs and Haystack mirror pages. Those paths skip Bloomberg page discovery and go straight to HLS selection/download.
 
@@ -78,7 +103,7 @@ https://www.bloomberg.com/media-manifest/embed?id=<assetId>&variant=LOOP&streamT
 10. From that JSON, prefer `streams[].url` pointing to Bloomberg `media-manifest/videos/LOOP/HD/...m3u8`.
 11. Fetch the LOOP/HD master manifest directly first and expand it to the final CDN media playlist. Bloomberg has used both Fastly and Akamai hosts; both `bbgvod-...fastly.net` and `bbgvod-...akamaized.net` are treated as first-party Bloomberg delivery.
 12. Select the highest useful Bloomberg delivery variant, typically `FHD5000.m3u8`, while deprioritizing `pubads.g.doubleclick.net` DAI playlists.
-13. Try `yt-dlp` first when available. The orchestrator passes the already-selected final CDN HLS variant, `--concurrent-fragments <workers>`, retry settings, Bloomberg Referer, browser User-Agent, and an MP4 output template. In default `--yt-dlp-proxy-mode auto`, it tries direct CDN download first because the final HLS segments are often globally reachable.
+13. Try `yt-dlp` first when available. The orchestrator passes the already-selected final CDN HLS variant, `--concurrent-fragments <workers>`, retry settings, Bloomberg Referer, browser User-Agent, and an MP4 output template. The default worker count is 32. In default `--yt-dlp-proxy-mode auto`, it tries direct CDN download first because the final HLS segments are often globally reachable.
 14. If direct `yt-dlp` download fails and a cached working proxy is available with `http` or `https`, the orchestrator starts a local `127.0.0.1` proxy forwarder and passes that local URL to `yt-dlp`. This avoids exposing upstream proxy credentials in the `yt-dlp` process arguments.
 15. If `yt-dlp` is unavailable or exits non-zero in `--download-backend auto` mode, fall back to `proxy_hls_downloader.py` with `--google-doh`, the selected HLS variant, and the original Bloomberg URL as the HTTP Referer.
 16. The fallback downloader:
@@ -101,7 +126,7 @@ The user-facing goal is one approval for one top-level command when Codex runs t
 python3 tools/download_bloomberg_video.py --url '<Bloomberg video URL>'
 ```
 
-That command owns cached asset lookup, background proxy fetches, Bloomberg manifest fetches, proxy subscription refresh, segmented curl downloads, ffmpeg remux, ffprobe verification, and temporary cleanup. In Codex, approving the command prefix `python3 tools/download_bloomberg_video.py` is the practical way to avoid separate confirmations for every subprocess.
+That command owns cached asset lookup, BRP discovery, Bloomberg manifest fetches, direct `yt-dlp` downloads, optional proxy fallback, ffmpeg remux, ffprobe verification, and temporary cleanup. In Codex, approving the command prefix `python3 tools/download_bloomberg_video.py` is the practical way to avoid separate confirmations for every subprocess. After that prefix is approved, normal Bloomberg URL requests should be handled by running the orchestrator directly instead of asking for separate approval for `curl`, browser probing, `yt-dlp`, `ffmpeg`, or proxy test internals.
 
 The visible Chrome path is not part of default operation anymore. Use it only as an explicit fallback:
 
@@ -116,6 +141,32 @@ The proxy subscription URL should not be committed. For normal local use, store 
 - `tmp/proxy_subscription_url.txt`
 - `BLOOMBERG_PROXY_SUBSCRIPTION_URL`
 - `tmp/proxy_sub.raw` if the subscription has already been fetched
+
+## GitHub Actions Deployment Shape
+
+The current resolver/downloader path is suitable for a GitHub Actions `workflow_dispatch` job that accepts one Bloomberg URL input. The job does not need a desktop browser on the fast path.
+
+Recommended job shape:
+
+1. Check out this private repo.
+2. Install Python 3.10+ dependencies with `python3 -m pip install -r requirements.txt`.
+3. Install `ffmpeg` so both `ffmpeg` and `ffprobe` are available.
+4. Optionally expose `BLOOMBERG_PROXY_SUBSCRIPTION_URL` from a GitHub secret for fallback only.
+5. Run:
+
+```bash
+python3 tools/download_bloomberg_video.py --url "$BLOOMBERG_URL"
+```
+
+6. Upload `downloads/*.mp4` to the chosen storage target.
+
+GitHub Actions-specific notes:
+
+- The primary path is BRP metadata discovery plus direct Bloomberg CDN download through `yt-dlp`; it should not require Chrome, AppleScript, local macOS state, or the user's browser profile.
+- Keep `--yt-dlp-proxy-mode auto` so the job tries direct CDN first and uses the proxy only after a direct CDN failure.
+- Keep proxy subscription material in GitHub Secrets. Do not write decoded proxy nodes to logs.
+- Large Bloomberg episodes are commonly 3-4 GiB. Artifact upload can be the simplest proof of concept, but durable automation should allow an object-storage or release-asset upload step if artifact storage is too constrained.
+- A future scheduled "latest episode" workflow should resolve the newest Bloomberg China Show page URL first, then call the same one-URL command. That resolver should remain separate from the downloader so manual URL downloads stay predictable.
 
 ## yt-dlp Test Results And Cloud Shape
 

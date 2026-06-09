@@ -1391,7 +1391,7 @@ def write_plan(work_dir: Path, url: str, asset_id: str | None, candidates: list[
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Download a Bloomberg video URL through the background proxy workflow.")
+    parser = argparse.ArgumentParser(description="Download a Bloomberg video URL through the direct-first background workflow.")
     parser.add_argument("--url", required=True, help="Bloomberg video page URL.")
     parser.add_argument("--subscription", type=Path, default=DEFAULT_SUBSCRIPTION)
     parser.add_argument("--subscription-url", help="Proxy subscription URL. Prefer env/file for normal use.")
@@ -1400,7 +1400,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--fetch-mode", choices=("headless", "proxy", "chrome"), default="headless")
     parser.add_argument("--proxy-test-url", help=f"URL used when scanning subscription nodes. Defaults to {DEFAULT_PROXY_TEST_URL}.")
     parser.add_argument("--google-doh", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--workers", type=int, default=16)
+    parser.add_argument("--workers", type=int, default=32)
     parser.add_argument("--download-backend", choices=("auto", "yt-dlp", "custom"), default="auto")
     parser.add_argument("--yt-dlp-bin", help="Path to yt-dlp. Defaults to YTDLP_BIN, PATH, then python -m yt_dlp.")
     parser.add_argument("--yt-dlp-proxy-mode", choices=("auto", "never", "always"), default="auto")
