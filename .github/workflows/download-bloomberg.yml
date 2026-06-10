@@ -1,0 +1,59 @@
+name: Download Bloomberg Video
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Bloomberg video URL
+        required: true
+        type: string
+        default: https://www.bloomberg.com/news/videos/2026-06-10/rupiah-risks-remain-after-surprise-indonesia-rate-hike-video
+
+jobs:
+  direct-cdn:
+    name: Direct CDN yt-dlp test
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Download through direct CDN
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          python tools/download_bloomberg_video.py \
+            --url "${{ inputs.url }}" \
+            --download-backend yt-dlp \
+            --yt-dlp-proxy-mode never \
+            --workers 32 \
+            --no-strategy-cache \
+            --keep-tmp
+
+      - name: Inspect output
+        run: |
+          ls -lh downloads
+          ffprobe -v error \
+            -show_entries format=duration,size,bit_rate \
+            -show_entries stream=index,codec_type,codec_name,width,height,avg_frame_rate \
+            -of json downloads/*.mp4
+
+      - name: Upload MP4
+        uses: actions/upload-artifact@v4
+        with:
+          name: bloomberg-video
+          path: downloads/*.mp4
+          retention-days: 5
