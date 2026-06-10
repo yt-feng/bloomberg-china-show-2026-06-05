@@ -37,6 +37,7 @@ DOWNLOADER = TOOLS / "proxy_hls_downloader.py"
 DEFAULT_SUBSCRIPTION = ROOT / "tmp/proxy_sub.raw"
 DEFAULT_SUBSCRIPTION_URL_FILE = ROOT / "tmp/proxy_subscription_url.txt"
 DEFAULT_PROXY_CACHE = ROOT / "tmp/working_proxy.url"
+DEFAULT_STRATEGY_CACHE = ROOT / "tmp/download_strategy.json"
 DEFAULT_PROXY_TEST_URL = "https://www.google.com/generate_204"
 
 UUID_RE = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
@@ -89,6 +90,52 @@ def chmod_private(path: Path) -> None:
         path.chmod(0o600)
     except OSError:
         pass
+
+
+def load_strategy_cache(args: argparse.Namespace) -> dict:
+    if args.no_strategy_cache:
+        return {}
+    path = resolve_path(args.strategy_cache)
+    if not path.exists() or path.stat().st_size == 0:
+        return {}
+    try:
+        data = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    bloomberg = data.get("bloomberg")
+    return bloomberg if isinstance(bloomberg, dict) else {}
+
+
+def update_strategy_cache(args: argparse.Namespace, **values: str) -> None:
+    if args.no_strategy_cache:
+        return
+    path = resolve_path(args.strategy_cache)
+    data: dict = {}
+    if path.exists() and path.stat().st_size > 0:
+        try:
+            loaded = json.loads(path.read_text())
+        except (json.JSONDecodeError, OSError):
+            loaded = {}
+        if isinstance(loaded, dict):
+            data = loaded
+    bloomberg = data.setdefault("bloomberg", {})
+    if not isinstance(bloomberg, dict):
+        bloomberg = {}
+        data["bloomberg"] = bloomberg
+    changed = False
+    for key, value in values.items():
+        if value and bloomberg.get(key) != value:
+            bloomberg[key] = value
+            changed = True
+    if not changed:
+        return
+    bloomberg["updated_at"] = int(time.time())
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+    chmod_private(path)
+    log(f"Updated local strategy cache: {rel(path)}")
 
 
 def read_http_header(sock: socket.socket, limit: int = 1024 * 1024) -> bytes:
@@ -1369,11 +1416,11 @@ def run_segmented_downloader(
     save_proxy_cache(work_dir, args.proxy_cache)
 
 
-def run_downloader(args: argparse.Namespace, variant: Variant, subscription: Path, work_dir: Path, output: Path) -> None:
+def run_downloader(args: argparse.Namespace, variant: Variant, subscription: Path, work_dir: Path, output: Path) -> str:
     if args.download_backend in {"auto", "yt-dlp"}:
         if run_ytdlp_downloader(args, variant, work_dir, output):
             save_proxy_cache(work_dir, args.proxy_cache)
-            return
+            return "yt-dlp"
         if args.download_backend == "yt-dlp":
             raise SystemExit("yt-dlp download failed.")
         log("Falling back to built-in segmented HLS downloader")
@@ -1381,6 +1428,7 @@ def run_downloader(args: argparse.Namespace, variant: Variant, subscription: Pat
     if not subscription.exists():
         subscription = ensure_subscription(args)
     run_segmented_downloader(args, variant, subscription, work_dir, output)
+    return "custom"
 
 
 def verify_output(output: Path) -> None:
@@ -1467,6 +1515,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", type=Path)
     parser.add_argument("--work-dir", type=Path)
     parser.add_argument("--proxy-cache", type=Path, default=DEFAULT_PROXY_CACHE)
+    parser.add_argument("--strategy-cache", type=Path, default=DEFAULT_STRATEGY_CACHE)
+    parser.add_argument("--no-strategy-cache", action="store_true", help="Ignore and do not update the local Bloomberg strategy cache.")
     parser.add_argument("--keep-tmp", action="store_true")
     parser.add_argument("--dry-run", action="store_true", help="Discover and select the HLS variant, but do not download.")
     parser.add_argument("--force", action="store_true", help="Replace an existing output file.")
@@ -1483,6 +1533,13 @@ def main(argv: list[str] | None = None) -> int:
     output_dir = resolve_path(args.output_dir)
     output = resolve_path(args.output) if args.output else output_dir / f"{slug}_1080p.mp4"
     work_dir = resolve_path(args.work_dir) if args.work_dir else ROOT / "tmp" / f"auto_{slug}"
+    strategy = load_strategy_cache(args)
+    if is_bloomberg_url(args.url) and args.fetch_mode == "headless" and strategy.get("discovery") == "proxy-brp":
+        args.fetch_mode = "proxy"
+        log("Using cached discovery strategy: proxy mode")
+    if is_bloomberg_url(args.url) and args.download_backend == "auto" and strategy.get("download_backend") == "custom":
+        args.download_backend = "custom"
+        log("Using cached download strategy: built-in segmented downloader")
 
     if output.exists() and not args.force and not args.dry_run:
         log(f"Output already exists; skipping download: {rel(output)}")
@@ -1557,7 +1614,25 @@ def main(argv: list[str] | None = None) -> int:
             del label
             return fetch_text_direct(url, timeout=timeout)
 
-        if not asset_id and is_bloomberg_url(args.url):
+        prefer_proxy_brp = strategy.get("discovery") == "proxy-brp"
+        proxy_brp_attempted = False
+        if not asset_id and is_bloomberg_url(args.url) and args.fetch_mode in {"headless", "proxy"} and prefer_proxy_brp:
+            proxy_brp_attempted = True
+            try:
+                log("Using cached discovery strategy: BRP through proxy first")
+                subscription = ensure_subscription(args)
+                fetcher, _proxy = build_proxy_fetcher(args, subscription, work_dir)
+                fetcher_kind = "proxy"
+                probe = probe_page_via_proxy(bloomberg_brp_url(args.url), work_dir, fetcher)
+            except (FetchError, SystemExit) as exc:
+                log(f"Proxy BRP discovery failed: {exc}")
+            else:
+                brp_asset_ids = extract_asset_ids(probe)
+                asset_id = choose_asset_id(probe, args.url, brp_asset_ids, None)
+                if asset_id:
+                    update_strategy_cache(args, discovery="proxy-brp")
+
+        if not asset_id and is_bloomberg_url(args.url) and not prefer_proxy_brp:
             try:
                 probe = probe_page_via_brp(args.url, work_dir)
             except FetchError as exc:
@@ -1565,6 +1640,22 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 brp_asset_ids = extract_asset_ids(probe)
                 asset_id = choose_asset_id(probe, args.url, brp_asset_ids, None)
+
+        if not asset_id and is_bloomberg_url(args.url) and args.fetch_mode in {"headless", "proxy"} and not proxy_brp_attempted:
+            proxy_brp_attempted = True
+            try:
+                subscription = ensure_subscription(args)
+                fetcher, _proxy = build_proxy_fetcher(args, subscription, work_dir)
+                fetcher_kind = "proxy"
+                log("Trying BRP background endpoint through proxy")
+                probe = probe_page_via_proxy(bloomberg_brp_url(args.url), work_dir, fetcher)
+            except (FetchError, SystemExit) as exc:
+                log(f"Proxy BRP discovery failed: {exc}")
+            else:
+                brp_asset_ids = extract_asset_ids(probe)
+                asset_id = choose_asset_id(probe, args.url, brp_asset_ids, None)
+                if asset_id:
+                    update_strategy_cache(args, discovery="proxy-brp")
 
         if not asset_id:
             if args.fetch_mode in {"headless", "proxy"}:
@@ -1687,7 +1778,9 @@ def main(argv: list[str] | None = None) -> int:
                 subscription = ensure_subscription(args)
             else:
                 subscription = resolve_path(args.subscription)
-        run_downloader(args, selected, subscription, work_dir, output)
+        backend_used = run_downloader(args, selected, subscription, work_dir, output)
+        if backend_used == "custom" and is_bloomberg_url(args.url):
+            update_strategy_cache(args, download_backend="custom")
         verify_output(output)
         success = True
         return 0

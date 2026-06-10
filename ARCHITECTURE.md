@@ -39,6 +39,7 @@ The workflow should interrupt the operator only when the URL cannot be classifie
   - Accepts a Bloomberg video page URL and orchestrates the full flow.
   - Reuses cached URL-to-asset mappings when available, tries Bloomberg's BRP background endpoint for page metadata, fetches Bloomberg's `embed` manifest directly first, selects the best HLS variant, prefers `yt-dlp` for HLS download/remux, falls back to proxy-backed download paths only when needed, verifies the MP4, and cleans temporary work files.
   - Uses `tmp/proxy_sub.raw` and `tmp/working_proxy.url` so repeated runs do not need subscription input or full proxy rescans.
+  - Uses `tmp/download_strategy.json` as a local strategy cache. When the local network repeatedly times out on direct Bloomberg/`yt-dlp` paths, the one-command workflow can prefer the last successful route, currently pure proxy-mode `BRP via proxy` discovery plus the built-in segmented downloader.
   - Defaults to non-invasive discovery. It only uses the visible Chrome/AppleScript path when `--fetch-mode chrome` is explicitly supplied.
   - Defaults to 32 HLS fragment workers, matching the fastest verified local run.
   - For `yt-dlp`, reads `YTDLP_BIN`, `PATH`, common local install paths, or `python -m yt_dlp`. The repo records this dependency in `requirements.txt`.
@@ -99,7 +100,7 @@ Internally, the script performs these steps:
 4. If the input URL is a Haystack video page, fetch the static HTML directly, extract the current page's Bloomberg Haystack media ID, derive the CloudFront HLS master URL, and evaluate that HLS playlist. The parser deliberately restricts itself to the page's Bloomberg video ID so recommended videos in the page payload cannot win variant selection.
 5. For Bloomberg pages, reuse a cached `assetId` for the exact Bloomberg URL when one exists in `tmp/auto_*/media_probe.json`. This lets historical playlist items download without opening any browser.
 6. If no cached mapping exists, attempt non-invasive discovery first through `https://brp-prod-bcc.bloomberg.com/...`. This backend route can return the same Next.js/RSC metadata while avoiding the normal `www.bloomberg.com` robot page from terminal/headless clients.
-7. If BRP discovery fails or is transiently unavailable, fall back to the background proxy and isolated-headless paths. Visible Chrome is reserved for explicit `--fetch-mode chrome` fallback.
+7. If the local strategy cache says the current machine should use `proxy-brp`, switch default `headless` mode to pure `proxy` mode and try BRP through the cached/scanned proxy before spending time on direct BRP timeouts or Chrome startup. Otherwise, if BRP discovery fails or is transiently unavailable, fall back to BRP-through-proxy, then the background proxy and isolated-headless paths. Visible Chrome is reserved for explicit `--fetch-mode chrome` fallback.
 8. When Bloomberg page discovery is required, prefer a playlist item `assetID` whose `url` matches the requested Bloomberg path. This matters for older episode pages because Bloomberg can render a current/recommended video in `currentVideo` while the requested historical episode appears in `playlistItems`.
 9. Fetch Bloomberg's own media metadata directly first, using a bounded manifest timeout. In the default headless/direct mode, a failed direct embed fetch is not repeated through the same direct fetcher. If an `assetId` is known and direct manifest fetch fails, the orchestrator tries the proxy fetcher before falling back to page resource candidates. Proxy and Chrome fetchers still get their normal second chance when explicitly selected.
 
@@ -112,7 +113,7 @@ https://www.bloomberg.com/media-manifest/embed?id=<assetId>&variant=LOOP&streamT
 12. Select the highest useful Bloomberg delivery variant, typically `FHD5000.m3u8`, while deprioritizing `pubads.g.doubleclick.net` DAI playlists.
 13. Try `yt-dlp` first when available. The orchestrator passes the already-selected final CDN HLS variant, `--concurrent-fragments <workers>`, retry settings, Bloomberg Referer, browser User-Agent, and an MP4 output template. The default worker count is 32. In default `--yt-dlp-proxy-mode auto`, it tries direct CDN download first because the final HLS segments are often globally reachable. If `yt-dlp` exits non-zero or does not create the expected MP4, the orchestrator removes matching `.part` and `.ytdl` residues before trying the next backend.
 14. If direct `yt-dlp` download fails and a cached working proxy is available with `http` or `https`, the orchestrator starts a local `127.0.0.1` proxy forwarder and passes that local URL to `yt-dlp`. This avoids exposing upstream proxy credentials in the `yt-dlp` process arguments.
-15. If `yt-dlp` is unavailable or exits non-zero in `--download-backend auto` mode, fall back to `proxy_hls_downloader.py` with `--google-doh`, the selected HLS variant, and the original Bloomberg URL as the HTTP Referer.
+15. If the local strategy cache says the current machine should use `custom`, skip `yt-dlp` in default `auto` mode and go straight to `proxy_hls_downloader.py`. Otherwise, if `yt-dlp` is unavailable or exits non-zero in `--download-backend auto` mode, fall back to `proxy_hls_downloader.py` with `--google-doh`, the selected HLS variant, and the original Bloomberg URL as the HTTP Referer.
 16. The fallback downloader:
    - decodes proxy nodes,
    - resolves proxy node DNS via DoH,
@@ -150,6 +151,7 @@ The proxy subscription URL should not be committed. For normal local use, store 
 - `tmp/proxy_subscription_url.txt`
 - `BLOOMBERG_PROXY_SUBSCRIPTION_URL`
 - `tmp/proxy_sub.raw` if the subscription has already been fetched
+- `tmp/download_strategy.json` for the ignored local route cache; it contains route names only, not proxy credentials
 
 ## GitHub Actions Deployment Shape
 
@@ -241,6 +243,46 @@ The 2026-06-08 page initially exposed a `pubads.g.doubleclick.net/ondemand/hls/.
 The download itself also looked more stalled than it was because the downloader consumed futures with `pool.map`, which returns results in input order. One slow early segment could block progress printing even while later segments were already downloaded. This is now fixed by consuming futures with `as_completed`.
 
 ## Known Runs
+
+Target page:
+
+```text
+https://www.bloomberg.com/news/videos/2026-06-10/the-china-show-6-10-2026-video
+```
+
+Asset ID:
+
+```text
+bb052e15-6e0f-414e-9b25-12f4a46c3a20
+```
+
+Selected 1080p HLS variant:
+
+```text
+https://bbgvod-s3-us-east1-zenko.global.ssl.fastly.net/vod/m/MTAyNTM1MTA/Q2xvdWRfMTQxODMwNQ/Thechinashow61026/Thechinashow61026FHD5000.m3u8
+```
+
+Final output:
+
+```text
+downloads/the_china_show_2026_06_10_1080p.mp4
+```
+
+Download notes:
+
+- Direct BRP discovery timed out locally.
+- Pure proxy-mode BRP discovery found the matching asset ID.
+- Direct and proxied `yt-dlp` timed out at the HLS manifest fetch step.
+- The built-in segmented downloader completed 621 segments with 32 workers and produced the verified MP4.
+- The local strategy cache now prefers proxy-mode BRP discovery plus the built-in segmented downloader for Bloomberg pages on this machine.
+
+Verified properties:
+
+- Video: H.264, 1920x1080, 29.97 fps
+- Audio: AAC
+- Duration: 6139.33 seconds
+- Size: 3,915,689,156 bytes, about 3.6 GiB
+- Bit rate: 5,102,429 bps
 
 Target page:
 

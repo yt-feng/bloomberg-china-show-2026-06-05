@@ -29,6 +29,8 @@ python3 tools/download_bloomberg_video.py \
 
 Default discovery is non-invasive: it reuses cached URL-to-asset mappings when available, otherwise uses Bloomberg's BRP background endpoint, then fetches the embed manifest and CDN playlist directly. If direct embed-manifest fetch fails and a proxy is configured, the script tries the proxy path automatically. The foreground Chrome browser is used only when explicitly requested with `--fetch-mode chrome`.
 
+The script also keeps an ignored local route cache at `tmp/download_strategy.json`. If this machine repeatedly times out on direct Bloomberg or `yt-dlp` paths, later Bloomberg runs can start from the last successful route, currently pure proxy-mode BRP discovery plus the built-in segmented downloader.
+
 One-time local proxy setup:
 
 ```bash
@@ -49,9 +51,11 @@ Useful switches:
 - `--segment-rounds 3`: control fallback retry rounds for missing or failed HLS segments.
 - `--download-backend auto|yt-dlp|custom`: default `auto` tries `yt-dlp` first and falls back to the built-in downloader.
 - `--yt-dlp-proxy-mode auto|never|always`: default `auto` tries direct CDN download first, then uses the cached proxy through a local credential-hiding forwarder if direct download fails.
+- `--no-strategy-cache`: ignore the local route cache and force the normal discovery/download order.
 
 Known downloaded outputs:
 
+- `downloads/the_china_show_2026_06_10_1080p.mp4`
 - `downloads/the_china_show_2026_06_05_1080p.mp4`
 - `downloads/the_china_show_2026_05_27_1080p.mp4`
 - `downloads/the_china_show_2026_06_04_1080p.mp4`
