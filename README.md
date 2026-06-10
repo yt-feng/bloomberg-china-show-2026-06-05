@@ -1,4 +1,4 @@
-# Bloomberg China Show Download
+# bbg China Show Download
 
 One-command workflow for downloading Bloomberg video pages through the direct-first background path, without using the foreground Chrome browser by default. The proxy subscription is only a fallback.
 
