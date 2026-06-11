@@ -31,6 +31,9 @@ AUDIO_DEDUPE_FILTER = (
     "acompressor=threshold=-20dB:ratio=1.08:attack=12:release=160,"
     "equalizer=f=3200:t=q:w=1.2:g=0.25,volume=1.012"
 )
+CHUNKED_SUBTITLE_THRESHOLD = 24
+CHUNKED_SUBTITLES_PER_PIECE = 8
+MIN_PIECE_SECONDS = 0.001
 SENSITIVE_ZH_TERMS = [
     "投资",
     "革命",
@@ -199,6 +202,21 @@ def render_clip(
     output: Path,
     threads: int,
 ) -> None:
+    if len(subtitle_pngs) > CHUNKED_SUBTITLE_THRESHOLD:
+        print(
+            f"  Using chunked renderer for {len(subtitle_pngs)} subtitle overlays",
+            flush=True,
+        )
+        render_clip_chunked(
+            source=source,
+            clip=clip,
+            static_png=static_png,
+            subtitle_pngs=subtitle_pngs,
+            output=output,
+            threads=threads,
+        )
+        return
+
     command = build_ffmpeg_command(
         source=source,
         clip=clip,
@@ -208,6 +226,203 @@ def render_clip(
         threads=threads,
     )
     subprocess.run(command, check=True)
+
+
+def render_clip_chunked(
+    *,
+    source: Path,
+    clip: dict[str, Any],
+    static_png: Path,
+    subtitle_pngs: list[tuple[Path, float, float]],
+    output: Path,
+    threads: int,
+) -> None:
+    duration = duration_of(clip)
+    piece_dir = static_png.parent / "pieces"
+    piece_dir.mkdir(parents=True, exist_ok=True)
+    pieces = build_render_pieces(duration, subtitle_pngs)
+
+    segment_paths: list[Path] = []
+    for idx, (start, end, piece_subtitles) in enumerate(pieces, start=1):
+        piece_duration = end - start
+        if piece_duration < MIN_PIECE_SECONDS:
+            continue
+        segment_path = piece_dir / f"part_{idx:04d}.mp4"
+        command = build_video_piece_command(
+            source=source,
+            clip=clip,
+            static_png=static_png,
+            subtitles=piece_subtitles,
+            piece_start=start,
+            piece_duration=piece_duration,
+            output=segment_path,
+            threads=threads,
+        )
+        print(
+            f"    part {idx:04d}: {start:.2f}-{end:.2f}s "
+            f"{len(piece_subtitles)} subtitle overlays",
+            flush=True,
+        )
+        subprocess.run(command, check=True)
+        segment_paths.append(segment_path)
+
+    if not segment_paths:
+        raise SystemExit("Chunked renderer produced no video segments")
+
+    concat_list = piece_dir / "concat.txt"
+    concat_video = piece_dir / "video_concat.mp4"
+    audio_path = piece_dir / "audio.m4a"
+    concat_list.write_text(
+        "ffconcat version 1.0\n"
+        + "".join(f"file '{ffconcat_escape(path.resolve())}'\n" for path in segment_paths),
+        encoding="utf-8",
+    )
+
+    subprocess.run([
+        "ffmpeg",
+        "-hide_banner", "-y", "-nostdin", "-loglevel", "error", "-nostats",
+        "-f", "concat", "-safe", "0", "-i", str(concat_list),
+        "-c", "copy",
+        str(concat_video),
+    ], check=True)
+
+    subprocess.run(build_audio_command(
+        source=source,
+        clip=clip,
+        duration=duration,
+        output=audio_path,
+    ), check=True)
+
+    subprocess.run([
+        "ffmpeg",
+        "-hide_banner", "-y", "-nostdin", "-loglevel", "error", "-nostats",
+        "-i", str(concat_video),
+        "-i", str(audio_path),
+        "-map", "0:v:0",
+        "-map", "1:a:0",
+        "-c:v", "copy",
+        "-c:a", "copy",
+        "-movflags", "+faststart",
+        "-shortest",
+        str(output),
+    ], check=True)
+
+
+def build_render_pieces(
+    duration: float,
+    subtitle_pngs: list[tuple[Path, float, float]],
+) -> list[tuple[float, float, list[tuple[Path, float, float]]]]:
+    pieces: list[tuple[float, float, list[tuple[Path, float, float]]]] = []
+    cursor = 0.0
+    subtitles: list[tuple[Path, float, float]] = []
+    for png, raw_start, raw_end in sorted(subtitle_pngs, key=lambda item: (item[1], item[2])):
+        start = max(0.0, min(duration, raw_start))
+        end = max(0.0, min(duration, raw_end))
+        if end > start:
+            subtitles.append((png, start, end))
+
+    if not subtitles:
+        return [(0.0, duration, [])]
+
+    for offset in range(0, len(subtitles), CHUNKED_SUBTITLES_PER_PIECE):
+        group = subtitles[offset:offset + CHUNKED_SUBTITLES_PER_PIECE]
+        next_group = subtitles[offset + CHUNKED_SUBTITLES_PER_PIECE:offset + CHUNKED_SUBTITLES_PER_PIECE + 1]
+        start = cursor
+        if next_group:
+            end = max(group[-1][2], next_group[0][1])
+        else:
+            end = duration
+        end = max(start, min(duration, end))
+        if end > start:
+            pieces.append((start, end, group))
+            cursor = end
+
+    if cursor < duration:
+        pieces.append((cursor, duration, []))
+    return pieces
+
+
+def build_video_piece_command(
+    *,
+    source: Path,
+    clip: dict[str, Any],
+    static_png: Path,
+    subtitles: list[tuple[Path, float, float]],
+    piece_start: float,
+    piece_duration: float,
+    output: Path,
+    threads: int,
+) -> list[str]:
+    image_inputs = [
+        "-loop", "1", "-framerate", "30000/1001",
+        "-t", f"{piece_duration:.3f}", "-i", str(static_png),
+    ]
+    for subtitle_png, _, _ in subtitles:
+        image_inputs.extend([
+            "-loop", "1", "-framerate", "30000/1001",
+            "-t", f"{piece_duration:.3f}", "-i", str(subtitle_png),
+        ])
+
+    return [
+        "ffmpeg",
+        "-hide_banner", "-y", "-nostdin", "-loglevel", "error", "-nostats",
+        "-filter_threads", str(threads),
+        "-filter_complex_threads", str(threads),
+        "-ss", f"{float(clip['start']) + piece_start:.3f}",
+        "-t", f"{piece_duration:.3f}",
+        "-i", str(source),
+        *image_inputs,
+        "-filter_complex", build_video_piece_filter(
+            piece_start=piece_start,
+            piece_duration=piece_duration,
+            subtitles=subtitles,
+        ),
+        "-map", "[vout]",
+        "-an",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
+        "-threads", str(threads), "-pix_fmt", "yuv420p",
+        "-movflags", "+faststart",
+        str(output),
+    ]
+
+
+def build_video_piece_filter(
+    *,
+    piece_start: float,
+    piece_duration: float,
+    subtitles: list[tuple[Path, float, float]],
+) -> str:
+    parts = [
+        "[0:v]setpts=PTS-STARTPTS,split=2[bgsrc][mainsrc]",
+        (
+            f"[bgsrc]crop=iw:ih-{SOURCE_TOP_CROP + SOURCE_BOTTOM_CROP}:0:{SOURCE_TOP_CROP},"
+            "scale=1080:1920:force_original_aspect_ratio=increase,"
+            f"crop=1080:1920,{BG_DEDUPE_FILTER}[bg]"
+        ),
+        (
+            f"[mainsrc]crop=iw:ih-{SOURCE_TOP_CROP + SOURCE_BOTTOM_CROP}:0:{SOURCE_TOP_CROP},"
+            f"scale=1080:-2,{MAIN_DEDUPE_FILTER}[main]"
+        ),
+        (
+            f"[bg][main]overlay=0:{MAIN_Y}:format=auto,"
+            f"drawbox=x=0:y={PANEL_Y}:w=1080:h={OUT_H - PANEL_Y}:color=black@0.88:t=fill[base]"
+        ),
+        "[base][1:v]overlay=0:0:format=auto[v1]",
+    ]
+
+    previous = "v1"
+    for input_idx, (_, start, end) in enumerate(subtitles, start=2):
+        local_start = max(0.0, start - piece_start)
+        local_end = min(piece_duration, end - piece_start)
+        if local_end <= local_start:
+            continue
+        label = f"v{input_idx}"
+        expr = f"between(t\\,{local_start:.3f}\\,{local_end:.3f})"
+        parts.append(f"[{previous}][{input_idx}:v]overlay=0:{CAPTION_Y}:format=auto:enable={expr}[{label}]")
+        previous = label
+
+    parts.append(f"[{previous}]format=yuv420p[vout]")
+    return ";".join(parts)
 
 
 def build_ffmpeg_command(
@@ -277,11 +492,43 @@ def build_filter_complex(duration: float, subtitle_pngs: list[tuple[Path, float,
     fade_out_start = max(0.0, duration - 5.0)
     fade_out_duration = min(5.0, duration)
     parts.append(
-        f"[0:a]asetpts=PTS-STARTPTS,{AUDIO_DEDUPE_FILTER},"
-        "afade=t=in:st=0:d=3,"
-        f"afade=t=out:st={fade_out_start:.3f}:d={fade_out_duration:.3f}[aout]"
+        f"[0:a]asetpts=PTS-STARTPTS,{build_audio_filter(duration)}[aout]"
     )
     return ";".join(parts)
+
+
+def build_audio_command(
+    *,
+    source: Path,
+    clip: dict[str, Any],
+    duration: float,
+    output: Path,
+) -> list[str]:
+    return [
+        "ffmpeg",
+        "-hide_banner", "-y", "-nostdin", "-loglevel", "error", "-nostats",
+        "-ss", f"{float(clip['start']):.3f}",
+        "-t", f"{duration:.3f}",
+        "-i", str(source),
+        "-vn",
+        "-af", f"asetpts=PTS-STARTPTS,{build_audio_filter(duration)}",
+        "-c:a", "aac", "-b:a", "160k", "-ar", "48000",
+        str(output),
+    ]
+
+
+def build_audio_filter(duration: float) -> str:
+    fade_out_start = max(0.0, duration - 5.0)
+    fade_out_duration = min(5.0, duration)
+    return (
+        f"{AUDIO_DEDUPE_FILTER},"
+        "afade=t=in:st=0:d=3,"
+        f"afade=t=out:st={fade_out_start:.3f}:d={fade_out_duration:.3f}"
+    )
+
+
+def ffconcat_escape(path: Path) -> str:
+    return str(path).replace("\\", "\\\\").replace("'", "\\'")
 
 
 def title_lines_for_clip(clip: dict[str, Any]) -> list[str]:
