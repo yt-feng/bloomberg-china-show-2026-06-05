@@ -1,0 +1,130 @@
+name: Extract Speaker Clips
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Bloomberg video URL
+        required: true
+        type: string
+        default: https://www.bloomberg.com/news/videos/2026-06-05/the-china-show-6-5-2026-video
+      speaker:
+        description: Speaker name to extract
+        required: true
+        type: string
+        default: Wang Yi
+      speaker_context:
+        description: Additional context about the speaker
+        required: false
+        type: string
+        default: "Goldman Sachs China equity strategist"
+      min_seconds:
+        description: Minimum clip duration (seconds)
+        required: false
+        type: number
+        default: 20
+      max_seconds:
+        description: Maximum clip duration (seconds)
+        required: false
+        type: number
+        default: 90
+      whisper_model:
+        description: Whisper model size (tiny/base/small/medium/large-v3)
+        required: false
+        type: string
+        default: medium
+
+jobs:
+  extract-speaker:
+    name: Download, transcribe, and extract speaker clips
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install faster-whisper
+
+      - name: Download Bloomberg video
+        env:
+          PYTHONUNBUFFERED: "1"
+          BLOOMBERG_PROXY_SUBSCRIPTION_URL: ${{ secrets.BLOOMBERG_PROXY_SUBSCRIPTION_URL }}
+        run: |
+          python tools/download_bloomberg_video.py \
+            --url "${{ inputs.url }}" \
+            --download-backend yt-dlp \
+            --yt-dlp-proxy-mode auto \
+            --workers 32 \
+            --no-strategy-cache
+
+      - name: Verify download
+        run: |
+          ls -lh downloads/
+          VIDEO_FILE=$(ls downloads/*.mp4 | head -1)
+          echo "VIDEO_FILE=$VIDEO_FILE" >> "$GITHUB_ENV"
+          ffprobe -v error \
+            -show_entries format=duration \
+            -of default=noprint_wrappers=1:nokey=1 \
+            "$VIDEO_FILE"
+
+      - name: Extract speaker clips
+        env:
+          PYTHONUNBUFFERED: "1"
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          python tools/extract_speaker_clips.py \
+            --video "$VIDEO_FILE" \
+            --speaker "${{ inputs.speaker }}" \
+            --speaker-context "${{ inputs.speaker_context }}" \
+            --out-dir "clips/${{ inputs.speaker }}" \
+            --work-dir work/speaker_extraction \
+            --min-seconds ${{ inputs.min_seconds }} \
+            --max-seconds ${{ inputs.max_seconds }} \
+            --whisper-model "${{ inputs.whisper_model }}" \
+            --language en
+
+      - name: Show results
+        run: |
+          echo "=== Extraction Results ==="
+          cat "clips/${{ inputs.speaker }}/manifest.json"
+          echo ""
+          echo "=== Clip files ==="
+          ls -lh "clips/${{ inputs.speaker }}/"
+
+      - name: Upload transcript
+        uses: actions/upload-artifact@v5
+        with:
+          name: transcript
+          path: work/speaker_extraction/transcript.json
+          retention-days: 30
+
+      - name: Upload speaker plan
+        uses: actions/upload-artifact@v5
+        with:
+          name: speaker-plan
+          path: work/speaker_extraction/speaker_plan.json
+          retention-days: 30
+
+      - name: Upload clips
+        uses: actions/upload-artifact@v5
+        with:
+          name: speaker-clips
+          path: clips/${{ inputs.speaker }}/
+          retention-days: 14
