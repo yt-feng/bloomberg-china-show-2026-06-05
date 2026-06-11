@@ -1,4 +1,4 @@
-name: Cut Speaker Clips (from known timestamps)
+name: Cut Speaker Clips (full render)
 
 on:
   workflow_dispatch:
@@ -9,22 +9,22 @@ on:
         type: string
         default: https://www.bloomberg.com/news/videos/2026-06-05/the-china-show-6-5-2026-video
       speaker:
-        description: Speaker name (for labeling)
+        description: Speaker name
         required: true
         type: string
         default: Wang Yi
       speaker_context:
-        description: Speaker context (for labeling)
+        description: Speaker context
         required: false
         type: string
         default: "Goldman Sachs, head of China real estate research"
       segment_start:
-        description: "Full speaker segment start (seconds)"
+        description: "Speaker segment start (seconds)"
         required: true
         type: number
         default: 4270
       segment_end:
-        description: "Full speaker segment end (seconds)"
+        description: "Speaker segment end (seconds)"
         required: true
         type: number
         default: 4755
@@ -40,10 +40,10 @@ on:
         default: 90
 
 jobs:
-  cut-clips:
-    name: Download video and cut speaker clips
+  render-clips:
+    name: Download → Transcribe → Plan → Render
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
@@ -56,12 +56,22 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
+      - name: Cache Whisper model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface/hub/models--Systran--faster-whisper-base
+          key: whisper-model-base
+
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg fonts-noto-cjk
+
+      - name: Install Python dependencies
+        run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
+          python -m pip install faster-whisper Pillow
 
       - name: Download Bloomberg video
         env:
@@ -82,32 +92,110 @@ jobs:
           echo "Downloaded: $VIDEO_FILE"
           ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$VIDEO_FILE"
 
-      - name: Cut speaker clips with DeepSeek planning
+      - name: Transcribe speaker segment
+        env:
+          PYTHONUNBUFFERED: "1"
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          mkdir -p work/speaker
+          python -c "
+          import json, sys
+          sys.path.insert(0, 'tools')
+          from extract_speaker_clips import transcribe
+          from pathlib import Path
+
+          # Extract and transcribe only the speaker segment (fast with base model)
+          import subprocess
+          video = '${{ env.VIDEO_FILE }}'
+          start = ${{ inputs.segment_start }}
+          end = ${{ inputs.segment_end }}
+
+          # Extract segment audio
+          subprocess.run([
+              'ffmpeg', '-y', '-ss', str(start), '-i', video,
+              '-t', str(end - start), '-vn', '-ac', '1', '-ar', '16000',
+              '-c:a', 'pcm_s16le', 'work/speaker/segment_audio.wav'
+          ], check=True, capture_output=True)
+
+          # Transcribe with faster-whisper base model
+          from faster_whisper import WhisperModel
+          import time
+          model = None
+          for attempt in range(5):
+              try:
+                  model = WhisperModel('base', device='cpu', compute_type='int8')
+                  break
+              except Exception as e:
+                  if '429' in str(e):
+                      time.sleep(20 * (attempt + 1))
+                  else:
+                      raise
+          if model is None:
+              raise SystemExit('Failed to load whisper model')
+
+          segments_iter, info = model.transcribe(
+              'work/speaker/segment_audio.wav',
+              language='en', vad_filter=True, beam_size=5,
+          )
+
+          segments = []
+          for seg in segments_iter:
+              segments.append({
+                  'start': round(seg.start + start, 2),
+                  'end': round(seg.end + start, 2),
+                  'text': seg.text.strip(),
+              })
+
+          payload = {'model': 'base', 'language': 'en', 'segments': segments}
+          Path('work/speaker/transcript.json').write_text(
+              json.dumps(payload, ensure_ascii=False, indent=2))
+          print(f'Transcribed {len(segments)} segments')
+          "
+
+      - name: Plan highlights with DeepSeek
         env:
           PYTHONUNBUFFERED: "1"
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
-          python tools/cut_speaker_segment.py \
-            --video "$VIDEO_FILE" \
+          python tools/plan_speaker_highlights.py \
+            --transcript work/speaker/transcript.json \
             --speaker "${{ inputs.speaker }}" \
             --speaker-context "${{ inputs.speaker_context }}" \
             --segment-start ${{ inputs.segment_start }} \
             --segment-end ${{ inputs.segment_end }} \
             --min-seconds ${{ inputs.min_clip_seconds }} \
             --max-seconds ${{ inputs.max_clip_seconds }} \
-            --out-dir "clips/${{ inputs.speaker }}"
+            --out work/speaker/highlight_plan.json
+
+      - name: Render clips (Pillow overlays + ffmpeg)
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          python tools/render_clips_linux.py \
+            --source "$VIDEO_FILE" \
+            --plan work/speaker/highlight_plan.json \
+            --out-dir "clips_final" \
+            --work-dir work/render \
+            --threads 2
 
       - name: Show results
         run: |
-          echo "=== Clip files ==="
-          ls -lh "clips/${{ inputs.speaker }}/"
+          echo "=== Final rendered clips ==="
+          ls -lh clips_final/
           echo ""
-          echo "=== Manifest ==="
-          cat "clips/${{ inputs.speaker }}/manifest.json"
+          echo "=== Plan ==="
+          cat work/speaker/highlight_plan.json | python -m json.tool | head -80
 
-      - name: Upload clips
+      - name: Upload rendered clips
         uses: actions/upload-artifact@v5
         with:
-          name: speaker-clips
-          path: clips/${{ inputs.speaker }}/
+          name: rendered-clips
+          path: clips_final/*.mp4
           retention-days: 14
+
+      - name: Upload plan
+        uses: actions/upload-artifact@v5
+        with:
+          name: highlight-plan
+          path: work/speaker/highlight_plan.json
+          retention-days: 30
