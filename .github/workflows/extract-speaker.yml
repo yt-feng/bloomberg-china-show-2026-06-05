@@ -56,6 +56,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg
 
+      - name: Cache Whisper model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface/hub/models--Systran--faster-whisper-${{ inputs.whisper_model }}
+          key: whisper-model-${{ inputs.whisper_model }}
+
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
