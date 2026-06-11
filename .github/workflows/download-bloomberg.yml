@@ -4,16 +4,49 @@ on:
   workflow_dispatch:
     inputs:
       url:
-        description: Bloomberg video URL
+        description: Bloomberg video page URL, HLS URL, or supported mirror URL
         required: true
         type: string
-        default: https://www.bloomberg.com/news/videos/2026-06-10/rupiah-risks-remain-after-surprise-indonesia-rate-hike-video
+        default: https://www.bloomberg.com/news/videos/2026-06-05/the-china-show-6-5-2026-video
+      artifact_name:
+        description: Artifact name for the downloaded video bundle
+        required: false
+        type: string
+        default: bloomberg-video
+      download_backend:
+        description: Downloader backend
+        required: false
+        type: choice
+        options:
+          - auto
+          - yt-dlp
+          - custom
+        default: auto
+      proxy_mode:
+        description: yt-dlp proxy mode
+        required: false
+        type: choice
+        options:
+          - auto
+          - never
+          - always
+        default: auto
+      keep_debug:
+        description: Upload discovery manifests, playlists, and debug work files
+        required: false
+        type: boolean
+        default: true
+      retention_days:
+        description: Artifact retention days
+        required: false
+        type: number
+        default: 14
 
 jobs:
-  direct-cdn:
-    name: Direct CDN yt-dlp test
+  download:
+    name: Download video and upload artifact
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 90
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
@@ -33,29 +66,88 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
-      - name: Download through direct CDN
+      - name: Download Bloomberg video
         env:
           PYTHONUNBUFFERED: "1"
+          BLOOMBERG_PROXY_SUBSCRIPTION_URL: ${{ secrets.BLOOMBERG_PROXY_SUBSCRIPTION_URL }}
         run: |
+          KEEP_ARGS=()
+          if [ "${{ inputs.keep_debug }}" = "true" ]; then
+            KEEP_ARGS+=(--keep-tmp)
+          fi
+
           python tools/download_bloomberg_video.py \
             --url "${{ inputs.url }}" \
-            --download-backend yt-dlp \
-            --yt-dlp-proxy-mode never \
+            --download-backend "${{ inputs.download_backend }}" \
+            --yt-dlp-proxy-mode "${{ inputs.proxy_mode }}" \
+            --output-dir downloads \
+            --work-dir work/download \
             --workers 32 \
             --no-strategy-cache \
-            --keep-tmp
+            "${KEEP_ARGS[@]}"
 
       - name: Inspect output
         run: |
-          ls -lh downloads
-          ffprobe -v error \
-            -show_entries format=duration,size,bit_rate \
-            -show_entries stream=index,codec_type,codec_name,width,height,avg_frame_rate \
-            -of json downloads/*.mp4
+          mkdir -p artifact-metadata
+          echo "=== Downloaded files ==="
+          find downloads -maxdepth 1 -type f -print -exec ls -lh {} \;
 
-      - name: Upload MP4
+          VIDEO_FILE=$(find downloads -type f -name '*.mp4' | head -1)
+          if [ -z "$VIDEO_FILE" ]; then
+            echo "No MP4 found in downloads/" >&2
+            exit 1
+          fi
+          export VIDEO_FILE
+          echo "VIDEO_FILE=$VIDEO_FILE" >> "$GITHUB_ENV"
+          echo "$VIDEO_FILE" > artifact-metadata/video_file.txt
+
+          ffprobe -v error \
+            -show_entries format=duration,size,bit_rate,format_name \
+            -show_entries stream=index,codec_type,codec_name,width,height,avg_frame_rate \
+            -of json "$VIDEO_FILE" | tee artifact-metadata/ffprobe.json
+
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          metadata = {
+              "url": os.environ.get("INPUT_URL", ""),
+              "video_file": os.environ.get("VIDEO_FILE", ""),
+              "run_id": os.environ.get("GITHUB_RUN_ID", ""),
+              "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT", ""),
+              "sha": os.environ.get("GITHUB_SHA", ""),
+              "download_backend": os.environ.get("INPUT_DOWNLOAD_BACKEND", ""),
+              "proxy_mode": os.environ.get("INPUT_PROXY_MODE", ""),
+          }
+          Path("artifact-metadata/download_metadata.json").write_text(
+              json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+        env:
+          INPUT_URL: ${{ inputs.url }}
+          INPUT_DOWNLOAD_BACKEND: ${{ inputs.download_backend }}
+          INPUT_PROXY_MODE: ${{ inputs.proxy_mode }}
+
+      - name: Upload video artifact
         uses: actions/upload-artifact@v5
         with:
-          name: bloomberg-video
-          path: downloads/*.mp4
-          retention-days: 5
+          name: ${{ inputs.artifact_name }}
+          path: |
+            downloads/*.mp4
+            artifact-metadata/*.json
+            artifact-metadata/*.txt
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention_days }}
+
+      - name: Upload debug artifact
+        if: ${{ inputs.keep_debug }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: ${{ inputs.artifact_name }}-debug
+          path: |
+            work/download/**
+            tmp/download_strategy.json
+          if-no-files-found: ignore
+          retention-days: ${{ inputs.retention_days }}
