@@ -623,3 +623,97 @@ ffprobe -v error \
 - Add proxy speed benchmarking instead of using the first working proxy.
 - Add subtitle playlist download and sidecar `.vtt` export if needed.
 - Add a scheduled "latest episode" resolver if the workflow needs to discover the newest Bloomberg China Show URL automatically instead of receiving the URL from the user.
+
+## Speaker Clip Rendering Pipeline
+
+This repo also supports extracting specific speaker segments from Bloomberg episodes and rendering them as vertical short videos with bilingual subtitles, styled identically to the local `vid_cut` pipeline.
+
+### Pipeline Overview
+
+```text
+Download video (download_bloomberg_video.py)
+    ↓
+Transcribe speaker segment only (faster-whisper, base model, CPU)
+    ↓
+Plan highlights with DeepSeek (plan_speaker_highlights.py)
+    ↓
+Generate overlay PNGs (render_overlays_pillow.py)
+    ↓
+Composite with ffmpeg (render_clips_linux.py)
+    ↓
+Upload final clips as artifact
+```
+
+### GitHub Actions Workflow
+
+Workflow: `.github/workflows/cut-speaker.yml` ("Cut Speaker Clips (full render)")
+
+Inputs:
+- `url`: Bloomberg video page URL
+- `speaker`: Speaker name (e.g. "Wang Yi")
+- `speaker_context`: Role/affiliation (e.g. "Goldman Sachs, head of China real estate research")
+- `segment_start` / `segment_end`: Known time range (seconds) where the speaker appears
+- `min_clip_seconds` / `max_clip_seconds`: Target clip duration bounds (default 20-90s)
+
+Secrets required:
+- `DEEPSEEK_API_KEY`: For highlight planning and subtitle translation
+- `BLOOMBERG_PROXY_SUBSCRIPTION_URL` (optional): Fallback for video download
+- `HF_TOKEN` (optional): Higher HuggingFace rate limit for Whisper model download
+
+### Rendering Components
+
+- `tools/render_overlays_pillow.py`
+  - Linux replacement for the macOS Swift renderer (`render_text_overlays.swift` in vid_cut).
+  - Reads the same `overlay_batch.json` format: a list of jobs with kind `static` or `subtitle`.
+  - Produces transparent PNG overlays using Pillow.
+  - Requires `fonts-noto-cjk` on Ubuntu for CJK text rendering.
+  - Static overlay (1080×1920): 3-line title with yellow keyword highlights, "KC桌面" watermark, CTA text.
+  - Subtitle overlays (1080×430): Chinese text + English text with per-phrase yellow highlights.
+  - Text shadow: black with gaussian blur, matching the Swift renderer's visual output.
+
+- `tools/plan_speaker_highlights.py`
+  - Generates `highlight_plan.json` in the exact format expected by the renderer.
+  - Uses DeepSeek to split the speaker segment into clips and produce bilingual subtitles.
+  - Output format per clip: `start`, `end`, `title`, `title_lines[3]`, `title_highlights`, `subtitles[]`.
+  - Each subtitle: `start`, `end`, `relative_start`, `relative_end`, `zh`, `en`, `zh_highlights`, `en_highlights`.
+  - Applies sensitive-word filtering (投资 → **, 股票 → 权益资产, etc.) in the prompt.
+
+- `tools/render_clips_linux.py`
+  - Port of `vid_cut/render_highlight_clips.py` for Linux.
+  - Calls `render_overlays_pillow.py` to generate PNGs, then composites with ffmpeg.
+  - Uses `libx264` encoder (no VideoToolbox dependency).
+  - Same `filter_complex` structure as vid_cut:
+    - Source split → blurred/darkened background (1080×1920) + cropped main panel
+    - Main panel at y=690, black subtitle panel at y=1110
+    - Static overlay (title/watermark/CTA) composited full-frame
+    - Subtitle PNGs composited at y=1125 with `enable=between(t,start,end)`
+    - Audio: highpass/lowpass, compression, EQ, fade in/out
+  - No throttling (SIGSTOP/SIGCONT) since Actions runners have no thermal concern.
+
+- `tools/extract_speaker_clips.py`
+  - Full-auto mode: transcribes entire video, uses DeepSeek to find speaker segments, cuts raw clips.
+  - Useful for discovery when segment timestamps are not yet known.
+  - Name variant matching: handles ASR name order differences (Wang Yi ↔ Yi Wang).
+
+- `tools/cut_speaker_segment.py`
+  - Lightweight mode: takes known segment timestamps, transcribes only that segment, cuts clips.
+  - Does not produce styled overlays (raw cuts only).
+
+### Visual Output Specification
+
+Final clips match the vid_cut竖版 format:
+
+- Resolution: 1080×1920 (9:16 vertical)
+- Background: source video cropped/scaled/darkened with noise
+- Main video: cropped (no Bloomberg top/bottom chrome), positioned at y=690
+- Title: 3-line bold white text with yellow highlights, positioned at y=250-676
+- Subtitle panel: black semi-transparent bar from y=1110 to bottom
+- Chinese subtitle: bold, up to 52px, yellow keyword highlights
+- English subtitle: bold, up to 52px, 94% alpha
+- Watermark: "KC桌面" at y=1668
+- CTA: "更多宏观信息，关注公众号KC桌面" at y=1586
+- Audio: fade in 3s, fade out 5s, light compression/EQ
+
+### Whisper Model Caching
+
+The workflow caches the Whisper model at `~/.cache/huggingface/hub/models--Systran--faster-whisper-base` using `actions/cache@v4`. First run downloads ~150MB; subsequent runs restore from cache instantly. The script also retries on HuggingFace 429 rate limits with exponential backoff.
