@@ -21,6 +21,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 WHITE = (255, 255, 255, 255)
 YELLOW = (255, 209, 51, 255)
 SHADOW_COLOR = (0, 0, 0, 199)  # ~78% alpha
+CJK_TRACKING_RATIO = -0.12
 
 # Font paths (Ubuntu with fonts-noto-cjk installed)
 FONT_PATHS = [
@@ -77,12 +78,86 @@ def text_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFon
     return float(draw.textlength(text, font=font))
 
 
+def is_cjk(char: str) -> bool:
+    code = ord(char)
+    return (
+        0x3400 <= code <= 0x4DBF
+        or 0x4E00 <= code <= 0x9FFF
+        or 0xF900 <= code <= 0xFAFF
+        or 0x20000 <= code <= 0x2A6DF
+        or 0x2A700 <= code <= 0x2B73F
+        or 0x2B740 <= code <= 0x2B81F
+        or 0x2B820 <= code <= 0x2CEAF
+    )
+
+
+def cjk_pair_tracking(font: ImageFont.FreeTypeFont) -> float:
+    return float(getattr(font, "size", 0)) * CJK_TRACKING_RATIO
+
+
+def display_text_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont) -> float:
+    width = 0.0
+    latin_run: list[str] = []
+
+    def flush_latin() -> None:
+        nonlocal width, latin_run
+        if latin_run:
+            width += text_width(draw, "".join(latin_run), font)
+            latin_run = []
+
+    for idx, char in enumerate(text):
+        next_char = text[idx + 1] if idx + 1 < len(text) else ""
+        if is_cjk(char):
+            flush_latin()
+            width += text_width(draw, char, font)
+            if next_char and is_cjk(next_char):
+                width += cjk_pair_tracking(font)
+        else:
+            latin_run.append(char)
+    flush_latin()
+    return width
+
+
+def draw_display_text(
+    draw: ImageDraw.ImageDraw,
+    x: float,
+    y: float,
+    text: str,
+    font: ImageFont.FreeTypeFont,
+    fill: Tuple[int, int, int, int],
+) -> float:
+    cursor = x
+    latin_run: list[str] = []
+
+    def flush_latin() -> None:
+        nonlocal cursor, latin_run
+        if not latin_run:
+            return
+        chunk = "".join(latin_run)
+        draw.text((cursor, y), chunk, font=font, fill=fill, anchor="lt")
+        cursor += text_width(draw, chunk, font)
+        latin_run = []
+
+    for idx, char in enumerate(text):
+        next_char = text[idx + 1] if idx + 1 < len(text) else ""
+        if is_cjk(char):
+            flush_latin()
+            draw.text((cursor, y), char, font=font, fill=fill, anchor="lt")
+            cursor += text_width(draw, char, font)
+            if next_char and is_cjk(next_char):
+                cursor += cjk_pair_tracking(font)
+        else:
+            latin_run.append(char)
+    flush_latin()
+    return cursor
+
+
 def line_text(line: Sequence[IndexedChar]) -> str:
     return "".join(char for char, _ in line)
 
 
 def line_width(draw: ImageDraw.ImageDraw, line: Sequence[IndexedChar], font: ImageFont.FreeTypeFont) -> float:
-    return text_width(draw, line_text(line), font)
+    return display_text_width(draw, line_text(line), font)
 
 
 def trim_line(line: Sequence[IndexedChar]) -> list[IndexedChar]:
@@ -262,26 +337,38 @@ def draw_line_segments(
     base_color: Tuple[int, int, int, int],
     ranges: Sequence[Tuple[int, int]],
 ) -> None:
-    segment: list[str] = []
-    segment_color: Tuple[int, int, int, int] | None = None
     cursor = x
+    latin_run: list[str] = []
+    latin_color: Tuple[int, int, int, int] | None = None
 
-    def flush() -> None:
-        nonlocal segment, segment_color, cursor
-        if not segment or segment_color is None:
+    def flush_latin() -> None:
+        nonlocal latin_run, latin_color, cursor
+        if not latin_run or latin_color is None:
             return
-        text = "".join(segment)
-        draw.text((cursor, y), text, font=font, fill=segment_color, anchor="lt")
+        text = "".join(latin_run)
+        draw.text((cursor, y), text, font=font, fill=latin_color, anchor="lt")
         cursor += text_width(draw, text, font)
-        segment = []
+        latin_run = []
+        latin_color = None
 
-    for char, original_index in line:
+    for idx, (char, original_index) in enumerate(line):
         color = YELLOW if is_highlighted(original_index, ranges) else base_color
-        if segment_color is not None and color != segment_color:
-            flush()
-        segment_color = color
-        segment.append(char)
-    flush()
+        next_char = line[idx + 1][0] if idx + 1 < len(line) else ""
+
+        if is_cjk(char):
+            flush_latin()
+            draw.text((cursor, y), char, font=font, fill=color, anchor="lt")
+            cursor += text_width(draw, char, font)
+            if next_char and is_cjk(next_char):
+                cursor += cjk_pair_tracking(font)
+            continue
+
+        if latin_color is not None and color != latin_color:
+            flush_latin()
+        latin_color = color
+        latin_run.append(char)
+
+    flush_latin()
 
 
 def draw_wrapped_text_with_highlights(
@@ -328,7 +415,7 @@ def draw_wrapped_text_with_highlights(
             text_line = line_text(line)
             width = line_width(measure_draw, line, font)
             line_x = x + (max_width - width) / 2 if align == "center" else x
-            shadow_draw.text((line_x, current_y), text_line, font=font, fill=shadow_color, anchor="lt")
+            draw_display_text(shadow_draw, line_x, current_y, text_line, font, shadow_color)
             current_y += measured_line_height(measure_draw, text_line, font) + line_spacing
         shadow_layer = shadow_layer.filter(ImageFilter.GaussianBlur(radius=shadow_blur))
         img.alpha_composite(shadow_layer)
