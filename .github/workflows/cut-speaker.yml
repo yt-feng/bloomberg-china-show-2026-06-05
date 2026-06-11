@@ -1,0 +1,113 @@
+name: Cut Speaker Clips (from known timestamps)
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Bloomberg video URL
+        required: true
+        type: string
+        default: https://www.bloomberg.com/news/videos/2026-06-05/the-china-show-6-5-2026-video
+      speaker:
+        description: Speaker name (for labeling)
+        required: true
+        type: string
+        default: Wang Yi
+      speaker_context:
+        description: Speaker context (for labeling)
+        required: false
+        type: string
+        default: "Goldman Sachs, head of China real estate research"
+      segment_start:
+        description: "Full speaker segment start (seconds)"
+        required: true
+        type: number
+        default: 4270
+      segment_end:
+        description: "Full speaker segment end (seconds)"
+        required: true
+        type: number
+        default: 4755
+      min_clip_seconds:
+        description: Minimum clip duration
+        required: false
+        type: number
+        default: 20
+      max_clip_seconds:
+        description: Maximum clip duration
+        required: false
+        type: number
+        default: 90
+
+jobs:
+  cut-clips:
+    name: Download video and cut speaker clips
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Download Bloomberg video
+        env:
+          PYTHONUNBUFFERED: "1"
+          BLOOMBERG_PROXY_SUBSCRIPTION_URL: ${{ secrets.BLOOMBERG_PROXY_SUBSCRIPTION_URL }}
+        run: |
+          python tools/download_bloomberg_video.py \
+            --url "${{ inputs.url }}" \
+            --download-backend yt-dlp \
+            --yt-dlp-proxy-mode auto \
+            --workers 32 \
+            --no-strategy-cache
+
+      - name: Identify video file
+        run: |
+          VIDEO_FILE=$(ls downloads/*.mp4 | head -1)
+          echo "VIDEO_FILE=$VIDEO_FILE" >> "$GITHUB_ENV"
+          echo "Downloaded: $VIDEO_FILE"
+          ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$VIDEO_FILE"
+
+      - name: Cut speaker clips with DeepSeek planning
+        env:
+          PYTHONUNBUFFERED: "1"
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          python tools/cut_speaker_segment.py \
+            --video "$VIDEO_FILE" \
+            --speaker "${{ inputs.speaker }}" \
+            --speaker-context "${{ inputs.speaker_context }}" \
+            --segment-start ${{ inputs.segment_start }} \
+            --segment-end ${{ inputs.segment_end }} \
+            --min-seconds ${{ inputs.min_clip_seconds }} \
+            --max-seconds ${{ inputs.max_clip_seconds }} \
+            --out-dir "clips/${{ inputs.speaker }}"
+
+      - name: Show results
+        run: |
+          echo "=== Clip files ==="
+          ls -lh "clips/${{ inputs.speaker }}/"
+          echo ""
+          echo "=== Manifest ==="
+          cat "clips/${{ inputs.speaker }}/manifest.json"
+
+      - name: Upload clips
+        uses: actions/upload-artifact@v5
+        with:
+          name: speaker-clips
+          path: clips/${{ inputs.speaker }}/
+          retention-days: 14

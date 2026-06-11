@@ -215,15 +215,25 @@ def find_speaker_segments(
         "Return strict JSON only."
     )
 
+    # Generate name variants for fuzzy matching in ASR output
+    name_parts = speaker_name.split()
+    name_variants = [speaker_name]
+    if len(name_parts) == 2:
+        # Add reversed order (Wang Yi -> Yi Wang)
+        name_variants.append(f"{name_parts[1]} {name_parts[0]}")
+    name_variants_str = " / ".join(f'"{v}"' for v in name_variants)
+
     user_prompt = f"""Transcript:
 {transcript_text}
 
 ---
 
 Target speaker: {speaker_name}
+Name variants in transcript (ASR may use different order/spelling): {name_variants_str}
 Context: {speaker_context}
 
-Task: Find ALL continuous segments where {speaker_name} is speaking or being interviewed.
+Task: Find ALL continuous segments where {speaker_name} (or any name variant listed above) is speaking or being interviewed.
+The transcript is from automatic speech recognition, so the speaker's name may appear as any of the variants above, or with slight misspellings.
 Include the host's questions that are directly part of the interview exchange with this speaker.
 Do NOT include segments where the anchor is talking to a different guest or reading market updates.
 
