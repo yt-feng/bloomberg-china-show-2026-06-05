@@ -38,6 +38,11 @@ on:
         required: false
         type: number
         default: 90
+      render_only:
+        description: "Optional clip indexes to render first, e.g. 1 or 1-2"
+        required: false
+        type: string
+        default: ""
 
 jobs:
   render-clips:
@@ -171,12 +176,17 @@ jobs:
         env:
           PYTHONUNBUFFERED: "1"
         run: |
+          RENDER_ARGS=()
+          if [ -n "${{ inputs.render_only }}" ]; then
+            RENDER_ARGS+=(--only "${{ inputs.render_only }}")
+          fi
           python tools/render_clips_linux.py \
             --source "$VIDEO_FILE" \
             --plan work/speaker/highlight_plan.json \
             --out-dir "clips_final" \
             --work-dir work/render \
-            --threads 2
+            --threads 2 \
+            "${RENDER_ARGS[@]}"
 
       - name: Show results
         run: |

@@ -31,6 +31,24 @@ AUDIO_DEDUPE_FILTER = (
     "acompressor=threshold=-20dB:ratio=1.08:attack=12:release=160,"
     "equalizer=f=3200:t=q:w=1.2:g=0.25,volume=1.012"
 )
+SENSITIVE_ZH_TERMS = [
+    "投资",
+    "革命",
+]
+PARAPHRASE_ZH_TERMS = [
+    ("投资者", "市场参与者"),
+    ("投资主题", "主线"),
+    ("中国股票", "中国市场"),
+    ("中国股", "中国市场"),
+    ("A 股", "内地市场"),
+    ("A股", "内地市场"),
+    ("港股", "香港市场"),
+    ("美股", "美国市场"),
+    ("股市", "市场"),
+    ("股票", "权益资产"),
+    ("个股", "单家公司"),
+    ("股", "权益"),
+]
 
 
 def main() -> None:
@@ -108,7 +126,11 @@ def parse_only(value: str | None, total: int) -> list[int]:
             indexes.update(range(int(left), int(right) + 1))
         elif part:
             indexes.add(int(part))
-    return sorted(indexes)
+    result = sorted(indexes)
+    for idx in result:
+        if idx < 1 or idx > total:
+            raise SystemExit(f"--only index out of range: {idx}; plan has {total} clip(s)")
+    return result
 
 
 def render_overlay_images(
@@ -124,9 +146,9 @@ def render_overlay_images(
             "output": str(static_png),
             "width": OUT_W,
             "height": OUT_H,
-            "title": str(clip.get("title", "")),
-            "titleLines": title_lines_for_clip(clip),
-            "titleHighlights": clip.get("title_highlights", []),
+            "title": safe_zh_text(str(clip.get("title", ""))),
+            "titleLines": [safe_zh_text(line) for line in title_lines_for_clip(clip)],
+            "titleHighlights": [safe_zh_text(str(item)) for item in clip.get("title_highlights", [])],
             "watermark": "KC桌面",
             "cta": "更多宏观信息，关注公众号KC桌面",
         }
@@ -137,15 +159,16 @@ def render_overlay_images(
         start, end = relative_times(clip, subtitle)
         if end <= start:
             continue
+        zh_source = subtitle.get("zh_filtered") or subtitle.get("zh", "")
         png = clip_dir / f"sub_{int(subtitle.get('index', len(subtitle_pngs) + 1)):03d}.png"
         jobs.append({
             "kind": "subtitle",
             "output": str(png),
             "width": CAPTION_W,
             "height": CAPTION_H,
-            "zh": str(subtitle.get("zh", "")),
-            "en": str(subtitle.get("en", "")),
-            "zhHighlights": subtitle.get("zh_highlights", []),
+            "zh": safe_zh_text(str(zh_source)),
+            "en": clean_display_text(str(subtitle.get("en", ""))),
+            "zhHighlights": [safe_zh_text(str(item)) for item in subtitle.get("zh_highlights", [])],
             "enHighlights": subtitle.get("en_highlights", []),
         })
         subtitle_pngs.append((png, start, end))
@@ -264,17 +287,53 @@ def build_filter_complex(duration: float, subtitle_pngs: list[tuple[Path, float,
 def title_lines_for_clip(clip: dict[str, Any]) -> list[str]:
     lines = clip.get("title_lines")
     if isinstance(lines, list) and len(lines) >= 3:
-        return [str(l).strip() for l in lines[:3]]
+        cleaned = [
+            clean_display_text(str(item)).replace("：", "").replace(":", "")
+            for item in lines[:3]
+        ]
+        if all(cleaned):
+            return cleaned
     if isinstance(lines, list) and len(lines) >= 2:
-        return [str(l).strip() for l in lines[:2]] + [""]
-    title = str(clip.get("title", ""))
+        cleaned = [clean_display_text(str(item)).replace("：", "").replace(":", "") for item in lines[:2]]
+        if all(cleaned):
+            return [cleaned[0], *split_title_topic(cleaned[1])]
+
+    title = clean_display_text(str(clip.get("title", "")))
     if "：" in title:
         left, right = title.split("：", 1)
-        return [left.strip(), right.strip(), ""]
+        return [left.strip(), *split_title_topic(right.strip())]
     if ":" in title:
         left, right = title.split(":", 1)
-        return [left.strip(), right.strip(), ""]
-    return [title, "", ""]
+        return [left.strip(), *split_title_topic(right.strip())]
+    return [title, ""]
+
+
+def split_title_topic(topic: str) -> list[str]:
+    topic = clean_display_text(topic)
+    if len(topic) <= 9:
+        return [topic, ""]
+
+    if topic.startswith("市场已提前定价"):
+        return ["市场已提前定价", topic.removeprefix("市场已提前定价").strip()]
+
+    candidates = []
+    for marker in ["危机", "预期", "央行", "回调后", "估值", "可能是", "已提前", "城市更新", "房价"]:
+        idx = topic.find(marker)
+        if idx > 0:
+            candidates.append(idx + len(marker))
+
+    if candidates:
+        split_at = min(candidates, key=lambda pos: abs(pos - len(topic) / 2))
+    else:
+        split_at = len(topic) // 2
+        for pos in range(max(4, split_at - 4), min(len(topic) - 3, split_at + 5)):
+            left = topic[:pos]
+            right = topic[pos:]
+            if not left.endswith(("的", "是", "和", "与")) and not right.startswith(("的", "是", "和", "与")):
+                split_at = pos
+                break
+
+    return [topic[:split_at].strip(), topic[split_at:].strip()]
 
 
 def output_name(index: int, clip: dict[str, Any]) -> str:
@@ -290,6 +349,35 @@ def output_name(index: int, clip: dict[str, Any]) -> str:
 
 def duration_of(clip: dict[str, Any]) -> float:
     return float(clip["end"]) - float(clip["start"])
+
+
+def filter_sensitive_zh(text: str) -> str:
+    for term in sorted(SENSITIVE_ZH_TERMS, key=len, reverse=True):
+        text = text.replace(term, "**")
+    return text
+
+
+def paraphrase_sensitive_zh(text: str) -> str:
+    for old, new in PARAPHRASE_ZH_TERMS:
+        text = text.replace(old, new)
+    return text
+
+
+def safe_zh_text(text: str) -> str:
+    return filter_sensitive_zh(paraphrase_sensitive_zh(clean_display_text(text)))
+
+
+def clean_display_text(text: str) -> str:
+    text = re.sub(r"\s+", " ", text).strip()
+    fixes = {
+        "straighter hummus": "Strait of Hormuz",
+        "street of Ramuz": "Strait of Hormuz",
+        "strait of hummus": "Strait of Hormuz",
+        "Richard Minman": "Richard Koo",
+    }
+    for bad, good in fixes.items():
+        text = re.sub(re.escape(bad), good, text, flags=re.IGNORECASE)
+    return text
 
 
 if __name__ == "__main__":

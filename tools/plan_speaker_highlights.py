@@ -21,6 +21,18 @@ from urllib.request import Request, urlopen
 
 
 DEEPSEEK_URL = "https://api.deepseek.com/chat/completions"
+HOST_OUTRO_PATTERNS = [
+    r"\bthank you\b",
+    r"\bleave it there\b",
+    r"\bhere'?s a look\b",
+    r"\basian markets\b",
+    r"\bmarkets are doing\b",
+    r"\bas we head into\b",
+    r"到此为止",
+    r"非常感谢",
+    r"亚洲市场",
+    r"开盘情况",
+]
 
 
 def ask_deepseek(api_key: str, system_prompt: str, user_prompt: str, temperature: float = 0.3) -> dict:
@@ -160,6 +172,9 @@ Important:
 - Timestamps are ABSOLUTE (from video start, not segment start)
 - Subtitles must cover the full clip without gaps
 - Each clip must have at least 3 subtitles
+- Every clip must contain a substantive answer from {args.speaker}. A host question is allowed only if the speaker answer follows in the same clip.
+- Do not create clips from host outros, thank-you lines, post-interview market recaps, market open boards, or transitions to the next segment. If the provided range includes that material, stop before it and return fewer clips.
+- Do not reuse the same subtitle text in multiple clips unless it genuinely appears twice in the source transcript.
 - Chinese titles must have hook/conflict angle, not flat descriptions
 - Avoid: 投资, 股票, A股, 港股, 美股 in Chinese text
 """
@@ -171,12 +186,9 @@ Important:
     if not clips:
         raise SystemExit("DeepSeek returned no clips")
 
-    # Post-process: add relative_start/relative_end to subtitles
-    for clip in clips:
-        clip_start = float(clip["start"])
-        for sub in clip.get("subtitles", []):
-            sub["relative_start"] = float(sub["start"]) - clip_start
-            sub["relative_end"] = float(sub["end"]) - clip_start
+    clips = postprocess_clips(clips, args.segment_start, args.segment_end)
+    if not clips:
+        raise SystemExit("All generated clips failed the speaker-content quality gate")
 
     # Write output
     payload = {
@@ -190,6 +202,66 @@ Important:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"Wrote plan: {args.out} ({len(clips)} clips)", flush=True)
+
+
+def postprocess_clips(clips: list[dict[str, Any]], segment_start: float, segment_end: float) -> list[dict[str, Any]]:
+    cleaned: list[dict[str, Any]] = []
+    for idx, clip in enumerate(clips, start=1):
+        try:
+            start = max(segment_start, float(clip["start"]))
+            end = min(segment_end, float(clip["end"]))
+        except (KeyError, TypeError, ValueError):
+            print(f"Skipping clip {idx}: invalid start/end", flush=True)
+            continue
+
+        if end <= start:
+            print(f"Skipping clip {idx}: empty after segment clamp", flush=True)
+            continue
+
+        if is_host_outro_or_market_recap(clip):
+            print(f"Skipping clip {idx}: host outro or market recap detected", flush=True)
+            continue
+
+        subtitles = []
+        for sub_idx, sub in enumerate(clip.get("subtitles", []), start=1):
+            try:
+                sub_start = max(start, float(sub["start"]))
+                sub_end = min(end, float(sub["end"]))
+            except (KeyError, TypeError, ValueError):
+                print(f"  Skipping subtitle {sub_idx} in clip {idx}: invalid start/end", flush=True)
+                continue
+            if sub_end <= sub_start:
+                continue
+            normalized = dict(sub)
+            normalized["start"] = sub_start
+            normalized["end"] = sub_end
+            normalized["relative_start"] = sub_start - start
+            normalized["relative_end"] = sub_end - start
+            subtitles.append(normalized)
+
+        if len(subtitles) < 2:
+            print(f"Skipping clip {idx}: fewer than 2 valid subtitles", flush=True)
+            continue
+
+        normalized_clip = dict(clip)
+        normalized_clip["start"] = start
+        normalized_clip["end"] = end
+        normalized_clip["subtitles"] = subtitles
+        cleaned.append(normalized_clip)
+
+    return cleaned
+
+
+def is_host_outro_or_market_recap(clip: dict[str, Any]) -> bool:
+    pieces = [
+        str(clip.get("title", "")),
+        " ".join(str(item) for item in clip.get("title_lines", []) if item),
+    ]
+    for sub in clip.get("subtitles", []):
+        pieces.append(str(sub.get("en", "")))
+        pieces.append(str(sub.get("zh", "")))
+    combined = "\n".join(pieces)
+    return any(re.search(pattern, combined, flags=re.IGNORECASE) for pattern in HOST_OUTRO_PATTERNS)
 
 
 if __name__ == "__main__":
