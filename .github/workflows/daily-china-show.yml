@@ -1,0 +1,199 @@
+name: Daily China Show Clips
+
+on:
+  schedule:
+    # 03:00 Asia/Shanghai = 19:00 UTC on the previous calendar day.
+    - cron: "0 19 * * *"
+  workflow_dispatch:
+    inputs:
+      show_date:
+        description: "China Show date in YYYY-MM-DD. Defaults to yesterday in Asia/Shanghai."
+        required: false
+        type: string
+        default: ""
+      url:
+        description: "Override Bloomberg video URL."
+        required: false
+        type: string
+        default: ""
+      max_speakers:
+        description: "Maximum keynote speakers to process."
+        required: false
+        type: number
+        default: 3
+      clips_per_speaker:
+        description: "Maximum highlight clips per speaker."
+        required: false
+        type: number
+        default: 5
+      font_preset:
+        description: "Overlay font preset."
+        required: false
+        type: choice
+        options:
+          - noto-serif-sc
+          - noto-sc
+          - wqy-zenhei
+          - wqy-microhei
+        default: noto-serif-sc
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-china-show-main
+  cancel-in-progress: false
+
+jobs:
+  daily-clips:
+    name: Download → Select Speakers → Render → Commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+      SHOW_DATE_INPUT: ${{ github.event.inputs.show_date || '' }}
+      URL_INPUT: ${{ github.event.inputs.url || '' }}
+      MAX_SPEAKERS: ${{ github.event.inputs.max_speakers || '3' }}
+      CLIPS_PER_SPEAKER: ${{ github.event.inputs.clips_per_speaker || '5' }}
+      FONT_PRESET: ${{ github.event.inputs.font_preset || 'noto-serif-sc' }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Cache Whisper model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface/hub/models--Systran--faster-whisper-base
+          key: whisper-model-base
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-noto-cjk fonts-wqy-zenhei fonts-wqy-microhei
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install faster-whisper Pillow
+
+      - name: Resolve China Show URL
+        run: |
+          mkdir -p work/daily
+          python tools/resolve_china_show_url.py \
+            --show-date "$SHOW_DATE_INPUT" \
+            --url "$URL_INPUT" \
+            --github-env "$GITHUB_ENV" \
+            --metadata work/daily/show.json
+
+      - name: Download Bloomberg video
+        env:
+          PYTHONUNBUFFERED: "1"
+          BLOOMBERG_PROXY_SUBSCRIPTION_URL: ${{ secrets.BLOOMBERG_PROXY_SUBSCRIPTION_URL }}
+        run: |
+          python tools/download_bloomberg_video.py \
+            --url "$SHOW_URL" \
+            --download-backend auto \
+            --yt-dlp-proxy-mode auto \
+            --output-dir downloads \
+            --work-dir work/download \
+            --workers 32 \
+            --no-strategy-cache
+
+      - name: Identify video file
+        run: |
+          VIDEO_FILE=$(find downloads -type f -name '*.mp4' | head -1)
+          if [ -z "$VIDEO_FILE" ]; then
+            echo "No MP4 found in downloads/" >&2
+            exit 1
+          fi
+          echo "VIDEO_FILE=$VIDEO_FILE" >> "$GITHUB_ENV"
+          echo "Downloaded: $VIDEO_FILE"
+          ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$VIDEO_FILE"
+
+      - name: Transcribe full show
+        env:
+          PYTHONUNBUFFERED: "1"
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python tools/transcribe_video.py \
+            --video "$VIDEO_FILE" \
+            --out work/daily/transcript.json \
+            --model base \
+            --language en \
+            --force
+
+      - name: Select keynote speakers
+        env:
+          PYTHONUNBUFFERED: "1"
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          python tools/select_daily_speakers.py \
+            --transcript work/daily/transcript.json \
+            --show-date "$SHOW_DATE" \
+            --out work/daily/speakers.json \
+            --max-speakers "$MAX_SPEAKERS"
+
+      - name: Plan speaker highlights
+        env:
+          PYTHONUNBUFFERED: "1"
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          python tools/plan_daily_highlights.py \
+            --transcript work/daily/transcript.json \
+            --speakers work/daily/speakers.json \
+            --out-dir work/daily/speaker_plans \
+            --combined-plan work/daily/highlight_plan.json \
+            --min-seconds 30 \
+            --max-seconds 150 \
+            --min-clips 3 \
+            --max-clips "$CLIPS_PER_SPEAKER"
+
+      - name: Render KC Desktop clips
+        env:
+          PYTHONUNBUFFERED: "1"
+          BBG_OVERLAY_FONT_PRESET: ${{ env.FONT_PRESET }}
+        run: |
+          rm -rf "$OUTPUT_DIR"
+          mkdir -p "$OUTPUT_DIR"
+          python tools/render_clips_linux.py \
+            --source "$VIDEO_FILE" \
+            --plan work/daily/highlight_plan.json \
+            --out-dir "$OUTPUT_DIR" \
+            --work-dir work/daily/render \
+            --threads 2 \
+            --force
+
+      - name: Copy metadata
+        run: |
+          cp work/daily/show.json "$OUTPUT_DIR/show.json"
+          cp work/daily/speakers.json "$OUTPUT_DIR/speakers.json"
+          cp work/daily/highlight_plan.json "$OUTPUT_DIR/highlight_plan.json"
+          find "$OUTPUT_DIR" -maxdepth 1 -type f -print -exec ls -lh {} \;
+
+      - name: Verify rendered clips
+        run: |
+          CLIP_COUNT=$(find "$OUTPUT_DIR" -type f -name '*.mp4' | wc -l)
+          echo "Rendered MP4 count: $CLIP_COUNT"
+          if [ "$CLIP_COUNT" -lt 1 ]; then
+            echo "No rendered clips produced" >&2
+            exit 1
+          fi
+
+      - name: Commit rendered clips to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$OUTPUT_DIR"
+          if git diff --cached --quiet; then
+            echo "No rendered clip changes to commit."
+            exit 0
+          fi
+          git commit -m "chore: publish China Show clips ${SHOW_DATE}"
+          git pull --rebase origin main
+          git push origin HEAD:main

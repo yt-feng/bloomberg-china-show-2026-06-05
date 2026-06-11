@@ -80,6 +80,8 @@ def main() -> None:
     parser.add_argument("--segment-end", type=float, required=True)
     parser.add_argument("--min-seconds", type=int, default=20)
     parser.add_argument("--max-seconds", type=int, default=90)
+    parser.add_argument("--min-clips", type=int, default=0, help="Preferred minimum number of clips; 0 disables.")
+    parser.add_argument("--max-clips", type=int, default=0, help="Maximum number of clips to keep; 0 disables.")
     parser.add_argument("--out", type=Path, required=True, help="Output highlight_plan.json path")
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
@@ -129,7 +131,7 @@ Transcript:
 ---
 
 Task:
-1. Split this into clips of {args.min_seconds}-{args.max_seconds} seconds each. Each clip should start/end at natural topic boundaries.
+1. Select the strongest short-video highlight clips of {args.min_seconds}-{args.max_seconds} seconds each. Each clip should start/end at natural topic boundaries.
 2. For each clip, provide:
    - A Chinese title (机构/嘉宾身份 + 热点事件 + hook结构, 例如 "高盛王逸：5万亿城市更新，会拖住楼市吗？")
    - title_lines: split the title into exactly 3 short lines for display (line1=机构嘉宾, line2=主题关键词, line3=hook/观点)
@@ -171,6 +173,7 @@ Return JSON:
 Important:
 - Timestamps are ABSOLUTE (from video start, not segment start)
 - Subtitles must cover the full clip without gaps
+- Return {clip_count_rule(args.min_clips, args.max_clips)}. If the interview genuinely cannot support the minimum without filler, return fewer high-quality clips.
 - Each clip must have at least 3 subtitles
 - Every clip must contain a substantive answer from {args.speaker}. A host question is allowed only if the speaker answer follows in the same clip.
 - Do not create clips from host outros, thank-you lines, post-interview market recaps, market open boards, or transitions to the next segment. If the provided range includes that material, stop before it and return fewer clips.
@@ -186,7 +189,14 @@ Important:
     if not clips:
         raise SystemExit("DeepSeek returned no clips")
 
-    clips = postprocess_clips(clips, args.segment_start, args.segment_end)
+    clips = postprocess_clips(
+        clips,
+        args.segment_start,
+        args.segment_end,
+        args.min_seconds,
+        args.max_seconds,
+        args.max_clips,
+    )
     if not clips:
         raise SystemExit("All generated clips failed the speaker-content quality gate")
 
@@ -204,7 +214,24 @@ Important:
     print(f"Wrote plan: {args.out} ({len(clips)} clips)", flush=True)
 
 
-def postprocess_clips(clips: list[dict[str, Any]], segment_start: float, segment_end: float) -> list[dict[str, Any]]:
+def clip_count_rule(min_clips: int, max_clips: int) -> str:
+    if min_clips > 0 and max_clips > 0:
+        return f"{min_clips}-{max_clips} clips total"
+    if max_clips > 0:
+        return f"up to {max_clips} clips total"
+    if min_clips > 0:
+        return f"at least {min_clips} clips total"
+    return "as many clips as the segment naturally supports"
+
+
+def postprocess_clips(
+    clips: list[dict[str, Any]],
+    segment_start: float,
+    segment_end: float,
+    min_seconds: int,
+    max_seconds: int,
+    max_clips: int,
+) -> list[dict[str, Any]]:
     cleaned: list[dict[str, Any]] = []
     for idx, clip in enumerate(clips, start=1):
         try:
@@ -216,6 +243,14 @@ def postprocess_clips(clips: list[dict[str, Any]], segment_start: float, segment
 
         if end <= start:
             print(f"Skipping clip {idx}: empty after segment clamp", flush=True)
+            continue
+
+        duration = end - start
+        if min_seconds > 0 and duration < min_seconds:
+            print(f"Skipping clip {idx}: too short ({duration:.1f}s < {min_seconds}s)", flush=True)
+            continue
+        if max_seconds > 0 and duration > max_seconds:
+            print(f"Skipping clip {idx}: too long ({duration:.1f}s > {max_seconds}s)", flush=True)
             continue
 
         if is_host_outro_or_market_recap(clip):
@@ -249,6 +284,8 @@ def postprocess_clips(clips: list[dict[str, Any]], segment_start: float, segment
         normalized_clip["subtitles"] = subtitles
         cleaned.append(normalized_clip)
 
+    if max_clips > 0:
+        cleaned = cleaned[:max_clips]
     return cleaned
 
 

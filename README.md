@@ -64,3 +64,19 @@ Known downloaded outputs:
 - `downloads/dalio_ai_bubble_to_burst_as_wealth_converts_to_money_2026_06_03.mp4`
 
 The workflow only downloads public HLS media URLs exposed by Bloomberg's own media manifests. It does not bypass DRM, paywall checks, or encrypted streams.
+
+## Daily China Show clips
+
+`.github/workflows/daily-china-show.yml` runs every day at 03:00 Beijing time
+(`0 19 * * *` UTC). It resolves yesterday's China Show URL using the Bloomberg
+date pattern, downloads the episode, transcribes it, selects keynote guest
+speakers, renders 3-5 KC Desktop formatted highlight clips per selected speaker,
+and commits the generated files to:
+
+```text
+rendered-clips/YYYY-MM-DD/
+```
+
+Manual dispatch accepts optional `show_date`, `url`, `max_speakers`,
+`clips_per_speaker`, and `font_preset` inputs. The default font preset is
+`noto-serif-sc`.
