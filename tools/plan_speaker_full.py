@@ -25,6 +25,7 @@ SENSITIVE_REPLACEMENTS = [
     ("A 股", "内地市场"),
     ("美股", "美国市场"),
 ]
+TRANSLATION_RETRIES = 3
 
 
 @dataclass
@@ -155,7 +156,29 @@ def translate_units(units: list[SubtitleUnit], speaker: str, context: str, batch
         batch = units[start:start + batch_size]
         print(f"Translating subtitles {batch[0].index}-{batch[-1].index}", flush=True)
         translated.update(translate_batch(api_key, batch, speaker, context))
+
+    missing = [unit for unit in units if not has_zh_translation(translated.get(unit.index))]
+    if missing:
+        print(
+            "Retrying missing subtitle translations: "
+            + ",".join(str(unit.index) for unit in missing),
+            flush=True,
+        )
+    for unit in missing:
+        for attempt in range(1, TRANSLATION_RETRIES + 1):
+            print(f"  Retry subtitle {unit.index} attempt {attempt}", flush=True)
+            retry = translate_batch(api_key, [unit], speaker, context)
+            item = retry.get(unit.index)
+            if has_zh_translation(item):
+                translated[unit.index] = item
+                break
     return translated
+
+
+def has_zh_translation(item: dict[str, Any] | None) -> bool:
+    if not item:
+        return False
+    return bool(clean_text(str(item.get("zh", ""))))
 
 
 def normalize_highlights(value: Any, text: str, limit: int = 2) -> list[str]:
@@ -239,7 +262,7 @@ def main() -> None:
     parser.add_argument("--subtitle-min-seconds", type=float, default=3.0)
     parser.add_argument("--subtitle-max-seconds", type=float, default=7.5)
     parser.add_argument("--subtitle-max-chars", type=int, default=220)
-    parser.add_argument("--batch-size", type=int, default=18)
+    parser.add_argument("--batch-size", type=int, default=10)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
 
