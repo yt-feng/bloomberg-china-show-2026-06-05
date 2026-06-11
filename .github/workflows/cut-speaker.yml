@@ -43,6 +43,11 @@ on:
         required: false
         type: string
         default: ""
+      font_preset:
+        description: "Overlay font preset: noto-sc, noto-serif-sc, wqy-zenhei, wqy-microhei, pingfang, or compare"
+        required: false
+        type: string
+        default: "noto-sc"
 
 jobs:
   render-clips:
@@ -70,7 +75,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-noto-cjk
+          sudo apt-get install -y ffmpeg fonts-noto-cjk fonts-wqy-zenhei fonts-wqy-microhei
 
       - name: Install Python dependencies
         run: |
@@ -175,23 +180,38 @@ jobs:
       - name: Render clips (Pillow overlays + ffmpeg)
         env:
           PYTHONUNBUFFERED: "1"
+          BBG_OVERLAY_FONT_PRESET: ${{ inputs.font_preset }}
         run: |
           RENDER_ARGS=()
           if [ -n "${{ inputs.render_only }}" ]; then
             RENDER_ARGS+=(--only "${{ inputs.render_only }}")
           fi
-          python tools/render_clips_linux.py \
-            --source "$VIDEO_FILE" \
-            --plan work/speaker/highlight_plan.json \
-            --out-dir "clips_final" \
-            --work-dir work/render \
-            --threads 2 \
-            "${RENDER_ARGS[@]}"
+          if [ "${BBG_OVERLAY_FONT_PRESET}" = "compare" ]; then
+            for PRESET in noto-sc noto-serif-sc wqy-zenhei wqy-microhei; do
+              echo "Rendering font preset: ${PRESET}"
+              BBG_OVERLAY_FONT_PRESET="${PRESET}" python tools/render_clips_linux.py \
+                --source "$VIDEO_FILE" \
+                --plan work/speaker/highlight_plan.json \
+                --out-dir "clips_final/${PRESET}" \
+                --work-dir "work/render-${PRESET}" \
+                --threads 2 \
+                "${RENDER_ARGS[@]}"
+            done
+          else
+            echo "Rendering font preset: ${BBG_OVERLAY_FONT_PRESET}"
+            python tools/render_clips_linux.py \
+              --source "$VIDEO_FILE" \
+              --plan work/speaker/highlight_plan.json \
+              --out-dir "clips_final" \
+              --work-dir work/render \
+              --threads 2 \
+              "${RENDER_ARGS[@]}"
+          fi
 
       - name: Show results
         run: |
           echo "=== Final rendered clips ==="
-          ls -lh clips_final/
+          find clips_final -type f -name '*.mp4' -print -exec ls -lh {} \;
           echo ""
           echo "=== Plan ==="
           cat work/speaker/highlight_plan.json | python -m json.tool | head -80
@@ -200,7 +220,9 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: rendered-clips
-          path: clips_final/*.mp4
+          path: |
+            clips_final/*.mp4
+            clips_final/**/*.mp4
           retention-days: 14
 
       - name: Upload plan

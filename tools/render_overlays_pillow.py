@@ -21,54 +21,148 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 WHITE = (255, 255, 255, 255)
 YELLOW = (255, 209, 51, 255)
 SHADOW_COLOR = (0, 0, 0, 199)  # ~78% alpha
-CJK_TRACKING_RATIO = -0.12
 
-# Font paths (Ubuntu with fonts-noto-cjk installed)
-FONT_PATHS = [
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
-    "/usr/share/fonts/noto-cjk/NotoSansCJK-Bold.ttc",
-    "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
-    "/usr/share/fonts/opentype/noto/NotoSansCJKsc-Bold.otf",
-    "/usr/share/fonts/noto/NotoSansCJKsc-Bold.otf",
-    # macOS fallbacks for local testing
-    "/System/Library/Fonts/PingFang.ttc",
-    "/System/Library/Fonts/STHeiti Medium.ttc",
-]
-
-FONT_PATHS_REGULAR = [
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-    "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
-    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-    "/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf",
-    "/usr/share/fonts/noto/NotoSansCJKsc-Regular.otf",
-    "/System/Library/Fonts/PingFang.ttc",
-]
+FontSpec = Tuple[str, int]
 
 
-def find_font(paths: List[str]) -> str:
-    for p in paths:
-        if os.path.exists(p):
-            return p
+FONT_PRESETS: dict[str, dict[str, list[FontSpec]]] = {
+    # The TTC defaults to the JP face in many environments. Use SC explicitly.
+    "noto-sc": {
+        "bold": [
+            ("/usr/share/fonts/opentype/noto/NotoSansCJKsc-Bold.otf", 0),
+            ("/usr/share/fonts/noto/NotoSansCJKsc-Bold.otf", 0),
+            ("/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc", 2),
+            ("/usr/share/fonts/noto-cjk/NotoSansCJK-Bold.ttc", 2),
+            ("/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc", 2),
+            ("/System/Library/Fonts/PingFang.ttc", 0),
+            ("/System/Library/Fonts/Hiragino Sans GB.ttc", 0),
+            ("/System/Library/Fonts/STHeiti Medium.ttc", 0),
+        ],
+        "regular": [
+            ("/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf", 0),
+            ("/usr/share/fonts/noto/NotoSansCJKsc-Regular.otf", 0),
+            ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", 2),
+            ("/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc", 2),
+            ("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc", 2),
+            ("/System/Library/Fonts/PingFang.ttc", 0),
+            ("/System/Library/Fonts/Hiragino Sans GB.ttc", 0),
+        ],
+    },
+    "noto-serif-sc": {
+        "bold": [
+            ("/usr/share/fonts/opentype/noto/NotoSerifCJKsc-Bold.otf", 0),
+            ("/usr/share/fonts/noto/NotoSerifCJKsc-Bold.otf", 0),
+            ("/usr/share/fonts/opentype/noto/NotoSerifCJK-Bold.ttc", 2),
+            ("/usr/share/fonts/noto-cjk/NotoSerifCJK-Bold.ttc", 2),
+        ],
+        "regular": [
+            ("/usr/share/fonts/opentype/noto/NotoSerifCJKsc-Regular.otf", 0),
+            ("/usr/share/fonts/noto/NotoSerifCJKsc-Regular.otf", 0),
+            ("/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc", 2),
+            ("/usr/share/fonts/noto-cjk/NotoSerifCJK-Regular.ttc", 2),
+        ],
+    },
+    "wqy-zenhei": {
+        "bold": [
+            ("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc", 0),
+            ("/usr/share/fonts/wenquanyi/wqy-zenhei/wqy-zenhei.ttc", 0),
+        ],
+        "regular": [
+            ("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc", 0),
+            ("/usr/share/fonts/wenquanyi/wqy-zenhei/wqy-zenhei.ttc", 0),
+        ],
+    },
+    "wqy-microhei": {
+        "bold": [
+            ("/usr/share/fonts/truetype/wqy/wqy-microhei.ttc", 0),
+            ("/usr/share/fonts/wenquanyi/wqy-microhei/wqy-microhei.ttc", 0),
+        ],
+        "regular": [
+            ("/usr/share/fonts/truetype/wqy/wqy-microhei.ttc", 0),
+            ("/usr/share/fonts/wenquanyi/wqy-microhei/wqy-microhei.ttc", 0),
+        ],
+    },
+    "pingfang": {
+        "bold": [
+            ("/System/Library/Fonts/PingFang.ttc", 0),
+            ("/System/Library/Fonts/Hiragino Sans GB.ttc", 0),
+            ("/System/Library/Fonts/STHeiti Medium.ttc", 0),
+        ],
+        "regular": [
+            ("/System/Library/Fonts/PingFang.ttc", 0),
+            ("/System/Library/Fonts/Hiragino Sans GB.ttc", 0),
+            ("/System/Library/Fonts/STHeiti Light.ttc", 0),
+        ],
+    },
+    # Diagnostic preset for reproducing the previous Linux default behavior.
+    "noto-jp": {
+        "bold": [
+            ("/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc", 0),
+            ("/usr/share/fonts/noto-cjk/NotoSansCJK-Bold.ttc", 0),
+            ("/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc", 0),
+        ],
+        "regular": [
+            ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", 0),
+            ("/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc", 0),
+            ("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc", 0),
+        ],
+    },
+}
+
+FONT_SPEC_CACHE: dict[bool, FontSpec] = {}
+
+
+def font_preset() -> str:
+    return os.environ.get("BBG_OVERLAY_FONT_PRESET", "noto-sc").strip().lower() or "noto-sc"
+
+
+def custom_font_specs(bold: bool) -> list[FontSpec]:
+    role = "BOLD" if bold else "REGULAR"
+    path = os.environ.get(f"BBG_OVERLAY_FONT_{role}") or os.environ.get("BBG_OVERLAY_FONT")
+    if not path:
+        return []
+    index = int(os.environ.get(f"BBG_OVERLAY_FONT_{role}_INDEX") or os.environ.get("BBG_OVERLAY_FONT_INDEX") or "0")
+    return [(path, index)]
+
+
+def preset_font_specs(bold: bool) -> list[FontSpec]:
+    preset = font_preset()
+    if preset not in FONT_PRESETS:
+        raise SystemExit(f"Unknown BBG_OVERLAY_FONT_PRESET={preset!r}. Available: {', '.join(sorted(FONT_PRESETS))}")
+    role = "bold" if bold else "regular"
+    return custom_font_specs(bold) or FONT_PRESETS[preset][role]
+
+
+def find_font(specs: List[FontSpec], bold: bool) -> FontSpec:
+    for path, index in specs:
+        if os.path.exists(path):
+            return path, index
     # Last resort: try fc-match
     import subprocess
     try:
+        family = "Noto Sans CJK SC:style=Bold" if bold else "Noto Sans CJK SC:style=Regular"
         result = subprocess.run(
-            ["fc-match", "--format=%{file}", "Noto Sans CJK SC:style=Bold"],
+            ["fc-match", "--format=%{file}", family],
             capture_output=True, text=True, check=True,
         )
         if result.stdout and os.path.exists(result.stdout):
-            return result.stdout
+            index = 2 if Path(result.stdout).name.startswith(("NotoSansCJK", "NotoSerifCJK")) and result.stdout.endswith(".ttc") else 0
+            return result.stdout, index
     except (subprocess.CalledProcessError, FileNotFoundError):
         pass
     raise SystemExit(
-        "No CJK font found. Install with: sudo apt-get install fonts-noto-cjk"
+        "No CJK font found. Install with: sudo apt-get install fonts-noto-cjk fonts-wqy-zenhei fonts-wqy-microhei"
     )
 
 
 def get_font(size: int, bold: bool = True) -> ImageFont.FreeTypeFont:
-    paths = FONT_PATHS if bold else FONT_PATHS_REGULAR
-    font_path = find_font(paths)
-    return ImageFont.truetype(font_path, size)
+    if bold not in FONT_SPEC_CACHE:
+        FONT_SPEC_CACHE[bold] = find_font(preset_font_specs(bold), bold)
+        role = "bold" if bold else "regular"
+        font_path, index = FONT_SPEC_CACHE[bold]
+        print(f"Overlay font preset={font_preset()} role={role} path={font_path} index={index}", file=sys.stderr)
+    font_path, index = FONT_SPEC_CACHE[bold]
+    return ImageFont.truetype(font_path, size, index=index)
 
 
 IndexedChar = Tuple[str, int]
@@ -78,86 +172,12 @@ def text_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFon
     return float(draw.textlength(text, font=font))
 
 
-def is_cjk(char: str) -> bool:
-    code = ord(char)
-    return (
-        0x3400 <= code <= 0x4DBF
-        or 0x4E00 <= code <= 0x9FFF
-        or 0xF900 <= code <= 0xFAFF
-        or 0x20000 <= code <= 0x2A6DF
-        or 0x2A700 <= code <= 0x2B73F
-        or 0x2B740 <= code <= 0x2B81F
-        or 0x2B820 <= code <= 0x2CEAF
-    )
-
-
-def cjk_pair_tracking(font: ImageFont.FreeTypeFont) -> float:
-    return float(getattr(font, "size", 0)) * CJK_TRACKING_RATIO
-
-
-def display_text_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont) -> float:
-    width = 0.0
-    latin_run: list[str] = []
-
-    def flush_latin() -> None:
-        nonlocal width, latin_run
-        if latin_run:
-            width += text_width(draw, "".join(latin_run), font)
-            latin_run = []
-
-    for idx, char in enumerate(text):
-        next_char = text[idx + 1] if idx + 1 < len(text) else ""
-        if is_cjk(char):
-            flush_latin()
-            width += text_width(draw, char, font)
-            if next_char and is_cjk(next_char):
-                width += cjk_pair_tracking(font)
-        else:
-            latin_run.append(char)
-    flush_latin()
-    return width
-
-
-def draw_display_text(
-    draw: ImageDraw.ImageDraw,
-    x: float,
-    y: float,
-    text: str,
-    font: ImageFont.FreeTypeFont,
-    fill: Tuple[int, int, int, int],
-) -> float:
-    cursor = x
-    latin_run: list[str] = []
-
-    def flush_latin() -> None:
-        nonlocal cursor, latin_run
-        if not latin_run:
-            return
-        chunk = "".join(latin_run)
-        draw.text((cursor, y), chunk, font=font, fill=fill, anchor="lt")
-        cursor += text_width(draw, chunk, font)
-        latin_run = []
-
-    for idx, char in enumerate(text):
-        next_char = text[idx + 1] if idx + 1 < len(text) else ""
-        if is_cjk(char):
-            flush_latin()
-            draw.text((cursor, y), char, font=font, fill=fill, anchor="lt")
-            cursor += text_width(draw, char, font)
-            if next_char and is_cjk(next_char):
-                cursor += cjk_pair_tracking(font)
-        else:
-            latin_run.append(char)
-    flush_latin()
-    return cursor
-
-
 def line_text(line: Sequence[IndexedChar]) -> str:
     return "".join(char for char, _ in line)
 
 
 def line_width(draw: ImageDraw.ImageDraw, line: Sequence[IndexedChar], font: ImageFont.FreeTypeFont) -> float:
-    return display_text_width(draw, line_text(line), font)
+    return text_width(draw, line_text(line), font)
 
 
 def trim_line(line: Sequence[IndexedChar]) -> list[IndexedChar]:
@@ -337,38 +357,26 @@ def draw_line_segments(
     base_color: Tuple[int, int, int, int],
     ranges: Sequence[Tuple[int, int]],
 ) -> None:
+    segment: list[str] = []
+    segment_color: Tuple[int, int, int, int] | None = None
     cursor = x
-    latin_run: list[str] = []
-    latin_color: Tuple[int, int, int, int] | None = None
 
-    def flush_latin() -> None:
-        nonlocal latin_run, latin_color, cursor
-        if not latin_run or latin_color is None:
+    def flush() -> None:
+        nonlocal segment, segment_color, cursor
+        if not segment or segment_color is None:
             return
-        text = "".join(latin_run)
-        draw.text((cursor, y), text, font=font, fill=latin_color, anchor="lt")
+        text = "".join(segment)
+        draw.text((cursor, y), text, font=font, fill=segment_color, anchor="lt")
         cursor += text_width(draw, text, font)
-        latin_run = []
-        latin_color = None
+        segment = []
 
-    for idx, (char, original_index) in enumerate(line):
+    for char, original_index in line:
         color = YELLOW if is_highlighted(original_index, ranges) else base_color
-        next_char = line[idx + 1][0] if idx + 1 < len(line) else ""
-
-        if is_cjk(char):
-            flush_latin()
-            draw.text((cursor, y), char, font=font, fill=color, anchor="lt")
-            cursor += text_width(draw, char, font)
-            if next_char and is_cjk(next_char):
-                cursor += cjk_pair_tracking(font)
-            continue
-
-        if latin_color is not None and color != latin_color:
-            flush_latin()
-        latin_color = color
-        latin_run.append(char)
-
-    flush_latin()
+        if segment_color is not None and color != segment_color:
+            flush()
+        segment_color = color
+        segment.append(char)
+    flush()
 
 
 def draw_wrapped_text_with_highlights(
@@ -415,7 +423,7 @@ def draw_wrapped_text_with_highlights(
             text_line = line_text(line)
             width = line_width(measure_draw, line, font)
             line_x = x + (max_width - width) / 2 if align == "center" else x
-            draw_display_text(shadow_draw, line_x, current_y, text_line, font, shadow_color)
+            shadow_draw.text((line_x, current_y), text_line, font=font, fill=shadow_color, anchor="lt")
             current_y += measured_line_height(measure_draw, text_line, font) + line_spacing
         shadow_layer = shadow_layer.filter(ImageFilter.GaussianBlur(radius=shadow_blur))
         img.alpha_composite(shadow_layer)
