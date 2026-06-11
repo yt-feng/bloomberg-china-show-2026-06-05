@@ -1,0 +1,40 @@
+{
+  "show_date": "2026-06-11",
+  "source_transcript": "work/daily/transcript.json",
+  "max_speakers": 3,
+  "speakers": [
+    {
+      "speaker": "Jing Sima",
+      "speaker_context": "Chief China Investment Strategist at BCA Research",
+      "segment_start": 1629.14,
+      "segment_end": 1980.0,
+      "duration": 350.86,
+      "confidence": 0.95,
+      "importance": 0.9,
+      "score": 3.335,
+      "reason": "Provides contrarian view on Chinese consumption and AI plays, discusses structural rebalancing and investment strategy."
+    },
+    {
+      "speaker": "Jill Deezis",
+      "speaker_context": "News desk managing editor",
+      "segment_start": 329.64,
+      "segment_end": 514.8,
+      "duration": 185.16,
+      "confidence": 0.95,
+      "importance": 0.8,
+      "score": 2.859,
+      "reason": "Provides analysis on US-Iran military strikes and their impact on oil markets and geopolitical risk."
+    },
+    {
+      "speaker": "Two Hot",
+      "speaker_context": "Portfolio Manager, Asia Head of Fixed Income at Rubico",
+      "segment_start": 2992.0,
+      "segment_end": 3240.0,
+      "duration": 248.0,
+      "confidence": 0.9,
+      "importance": 0.7,
+      "score": 2.713,
+      "reason": "Portfolio manager discussing Fed rate outlook, US Treasury yields, and EM fixed income strategy"
+    }
+  ]
+}

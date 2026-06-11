@@ -1,0 +1,928 @@
+{
+  "show_date": "2026-06-11",
+  "source_transcript": "work/daily/transcript.json",
+  "source_speakers": "work/daily/speakers.json",
+  "plan_files": [
+    "work/daily/speaker_plans/01_Jing_Sima.json",
+    "work/daily/speaker_plans/02_Jill_Deezis.json",
+    "work/daily/speaker_plans/03_Two_Hot.json"
+  ],
+  "skipped_speakers": [],
+  "clips": [
+    {
+      "start": 1643.8,
+      "end": 1724.9,
+      "speaker": "Jing Sima",
+      "title": "BCA Jing Sima：消费疲软无政策支撑，中国经济再平衡在工业端",
+      "title_lines": [
+        "BCA Jing Sima",
+        "消费疲软无政策支撑",
+        "中国经济再平衡在工业端"
+      ],
+      "title_highlights": [
+        "消费疲软",
+        "再平衡",
+        "工业端"
+      ],
+      "subtitles": [
+        {
+          "index": 1,
+          "start": 1643.8,
+          "end": 1651.1,
+          "en": "we don't agree to Chinese MCI China index basically because the heavy weight of consumer facing e-commerce in that index",
+          "zh": "我们不同意中国MCI中国指数，因为该指数中面向消费者的电子商务权重过高",
+          "zh_highlights": [
+            "不同意",
+            "权重过高"
+          ],
+          "en_highlights": [
+            "don't agree",
+            "heavy weight"
+          ],
+          "relative_start": 0.0,
+          "relative_end": 7.2999999999999545
+        },
+        {
+          "index": 2,
+          "start": 1651.1,
+          "end": 1667.3,
+          "en": "so we I think for the rest of the year we're not seeing any policy support any meaningful policy support in the consumption consumer sector so I think that play probably we're staying we're maintaining our call for the rest of the year at least",
+          "zh": "我们认为今年剩余时间看不到任何有意义的政策支持消费领域，所以我们维持看空观点",
+          "zh_highlights": [
+            "看不到",
+            "政策支持"
+          ],
+          "en_highlights": [
+            "not seeing",
+            "policy support"
+          ],
+          "relative_start": 7.2999999999999545,
+          "relative_end": 23.5
+        },
+        {
+          "index": 3,
+          "start": 1667.3,
+          "end": 1684.6,
+          "en": "that's fairly non-consensus most economists that we talked to here think that the consumption stories about to pick up yeah well we have a contrarian view here because I think our structural view is that if we think about Chinese economic rebalancing we're actually thinking differently",
+          "zh": "这相当非共识，大多数经济学家认为消费即将回暖，但我们持相反观点，因为我们对经济再平衡的看法不同",
+          "zh_highlights": [
+            "非共识",
+            "相反观点"
+          ],
+          "en_highlights": [
+            "non-consensus",
+            "contrarian view"
+          ],
+          "relative_start": 23.5,
+          "relative_end": 40.799999999999955
+        },
+        {
+          "index": 4,
+          "start": 1684.6,
+          "end": 1705.6,
+          "en": "we're not thinking that policymakers are going to meaningfully boost consumption or consumer sector while consumption really is driven by mostly three things you know job security wage growth and also households willingness to take on more loans and none of the three is happening in China",
+          "zh": "我们认为政策制定者不会大幅提振消费，因为消费主要由三件事驱动：工作保障、工资增长和家庭借贷意愿，而这三件事在中国都没有发生",
+          "zh_highlights": [
+            "不会大幅提振",
+            "三件事"
+          ],
+          "en_highlights": [
+            "not going to meaningfully boost",
+            "none of the three is happening"
+          ],
+          "relative_start": 40.799999999999955,
+          "relative_end": 61.799999999999955
+        },
+        {
+          "index": 5,
+          "start": 1705.6,
+          "end": 1724.9,
+          "en": "and without any meaningful policy support any structural reforms this is not happening you know we're not seeing any meaningful pickup in consumption rather I think the economic rebalancing is happening in the manufacturing or industrial supply chains",
+          "zh": "没有有意义的政策支持和结构性改革，消费不会回暖。相反，经济再平衡正在制造业或工业供应链中发生",
+          "zh_highlights": [
+            "不会回暖",
+            "再平衡",
+            "工业供应链"
+          ],
+          "en_highlights": [
+            "not happening",
+            "rebalancing",
+            "industrial supply chains"
+          ],
+          "relative_start": 61.799999999999955,
+          "relative_end": 81.10000000000014
+        }
+      ],
+      "speaker_context": "Chief China Investment Strategist at BCA Research",
+      "daily_speaker_index": 1
+    },
+    {
+      "start": 1771.0,
+      "end": 1841.6,
+      "speaker": "Jing Sima",
+      "title": "BCA Jing Sima：中国AI公司尚未盈利，全球投资者需谨慎",
+      "title_lines": [
+        "BCA Jing Sima",
+        "中国AI公司尚未盈利",
+        "全球投资者需谨慎"
+      ],
+      "zh_highlights": [
+        "尚未盈利",
+        "需谨慎"
+      ],
+      "en_highlights": [
+        "not seeing monetization",
+        "late cycle"
+      ],
+      "subtitles": [
+        {
+          "index": 1,
+          "start": 1771.0,
+          "end": 1783.3,
+          "en": "yeah well I think there are main two main reasons one is a lot of those companies you know they're selling this AI story but you know we don't see monetization yet we don't see profitability yet",
+          "zh": "主要有两个原因：一是很多公司都在讲AI故事，但我们还没有看到变现和盈利能力",
+          "zh_highlights": [
+            "没有看到变现",
+            "盈利能力"
+          ],
+          "en_highlights": [
+            "don't see monetization",
+            "don't see profitability"
+          ],
+          "relative_start": 0.0,
+          "relative_end": 12.299999999999955
+        },
+        {
+          "index": 2,
+          "start": 1783.3,
+          "end": 1796.0,
+          "en": "compared to especially compared to some of the Korean companies Taiwanese companies the US companies especially so in relative terms I think for global investors Chinese AI companies are up and coming but they're still emerging they're not there yet",
+          "zh": "与韩国、台湾、美国公司相比，中国AI公司还在崛起中，尚未成熟",
+          "zh_highlights": [
+            "尚未成熟"
+          ],
+          "en_highlights": [
+            "still emerging",
+            "not there yet"
+          ],
+          "relative_start": 12.299999999999955,
+          "relative_end": 25.0
+        },
+        {
+          "index": 3,
+          "start": 1796.0,
+          "end": 1816.1,
+          "en": "and the other thing is I do believe we're in the late cycle a lot of indicators are shown in signs of a typical late cycle in catags so I think take AI catags is a pretty pretty certain story but on the rate of change basis you know this year we see huge catags next year we're going to see catags in absolute levels but rate of change basis we may see a moderation",
+          "zh": "另一个原因是我们处于周期后期，AI资本支出虽然确定，但增速可能放缓",
+          "zh_highlights": [
+            "周期后期",
+            "增速放缓"
+          ],
+          "en_highlights": [
+            "late cycle",
+            "moderation"
+          ],
+          "relative_start": 25.0,
+          "relative_end": 45.09999999999991
+        },
+        {
+          "index": 4,
+          "start": 1816.1,
+          "end": 1841.6,
+          "en": "okay um is that going to play out in China though because the the AI plays in China have largely moved along the domestic story not so much the global catags story I just wonder how you two those two themes intersect well yeah they are you're right they're two two themes",
+          "zh": "中国的AI行情主要跟随国内故事，而非全球资本支出故事，这两个主题如何交叉？",
+          "zh_highlights": [
+            "国内故事",
+            "全球资本支出"
+          ],
+          "en_highlights": [
+            "domestic story",
+            "global catags story"
+          ],
+          "relative_start": 45.09999999999991,
+          "relative_end": 70.59999999999991
+        }
+      ],
+      "speaker_context": "Chief China Investment Strategist at BCA Research",
+      "daily_speaker_index": 1
+    },
+    {
+      "start": 1904.0,
+      "end": 1980.0,
+      "speaker": "Jing Sima",
+      "title": "BCA Jing Sima：转向基础设施投资，看好原材料和工业板块",
+      "title_lines": [
+        "BCA Jing Sima",
+        "转向基础设施投资",
+        "看好原材料和工业板块"
+      ],
+      "zh_highlights": [
+        "基础设施",
+        "原材料",
+        "工业"
+      ],
+      "en_highlights": [
+        "infrastructure-related",
+        "raw materials",
+        "industrials"
+      ],
+      "subtitles": [
+        {
+          "index": 1,
+          "start": 1904.0,
+          "end": 1918.3,
+          "en": "so we are moving away from slowly moving away from the AI darlings dogs into something we're starting to look into instructor-related more of the pigs and shovels kind of stocks sectors I would say raw materials industrials",
+          "zh": "我们正在慢慢远离AI宠儿，转向基础设施相关板块，比如原材料和工业",
+          "zh_highlights": [
+            "远离AI",
+            "转向基础设施"
+          ],
+          "en_highlights": [
+            "moving away from AI",
+            "infrastructure-related"
+          ],
+          "relative_start": 0.0,
+          "relative_end": 14.299999999999955
+        },
+        {
+          "index": 2,
+          "start": 1918.3,
+          "end": 1944.3,
+          "en": "we do see signs very early signs of pickup in instructor investment especially central government regulatory oversight over local government financing and local government regulatory is basically so I think that those are early signs",
+          "zh": "我们看到基础设施投资回升的早期迹象，尤其是中央政府对地方政府融资的监管",
+          "zh_highlights": [
+            "早期迹象",
+            "中央政府监管"
+          ],
+          "en_highlights": [
+            "early signs",
+            "central government regulatory oversight"
+          ],
+          "relative_start": 14.299999999999955,
+          "relative_end": 40.299999999999955
+        },
+        {
+          "index": 3,
+          "start": 1944.3,
+          "end": 1965.9,
+          "en": "usually when you see those signs you see some pickup in instructor investment so our bet is second of the year we are going to see a step up in investment in the instructor set",
+          "zh": "通常看到这些迹象后，基础设施投资会回升，我们押注下半年基础设施投资将加速",
+          "zh_highlights": [
+            "押注",
+            "下半年",
+            "加速"
+          ],
+          "en_highlights": [
+            "bet",
+            "step up"
+          ],
+          "relative_start": 40.299999999999955,
+          "relative_end": 61.90000000000009
+        },
+        {
+          "index": 4,
+          "start": 1965.9,
+          "end": 1980.0,
+          "en": "to the point you were making earlier the rebalancing of the economy it's the industrial side do I find those names onshore mostly or offshore onshore I think mostly right now mostly onshore not because the companies are not listed in Hong Kong it's just those",
+          "zh": "这些公司主要在内地上市，而不是香港，不是因为它们不在香港上市，而是...",
+          "zh_highlights": [
+            "内地上市"
+          ],
+          "en_highlights": [
+            "onshore"
+          ],
+          "relative_start": 61.90000000000009,
+          "relative_end": 76.0
+        }
+      ],
+      "speaker_context": "Chief China Investment Strategist at BCA Research",
+      "daily_speaker_index": 1
+    },
+    {
+      "start": 329.64,
+      "end": 388.1,
+      "speaker": "Jill Deezis",
+      "title": "Jill Deezis：美伊冲突升级，临时停火名存实亡",
+      "title_lines": [
+        "Jill Deezis",
+        "美伊冲突升级",
+        "临时停火名存实亡"
+      ],
+      "title_highlights": [
+        "美伊冲突升级",
+        "临时停火名存实亡"
+      ],
+      "subtitles": [
+        {
+          "index": 1,
+          "start": 329.64,
+          "end": 334.1,
+          "en": "and Iran let's bring in Jill Deezis or news desk managing editor I mean this is probably one of the biggest flare 16 weeks really what's the latest yes that's right Yvonne it's actually",
+          "zh": "关于伊朗，我们请来新闻台总编辑Jill Deezis。这可能是16周来最大的一次冲突。最新情况如何？是的，Yvonne，实际上",
+          "zh_highlights": [
+            "最大的一次冲突"
+          ],
+          "en_highlights": [
+            "biggest flare"
+          ],
+          "relative_start": 0.0,
+          "relative_end": 4.460000000000036
+        },
+        {
+          "index": 2,
+          "start": 334.1,
+          "end": 343.7,
+          "en": "just reading this latest statement from Sunt Com saying that the latest round of strikes has been concluded but at the same time it's really difficult to even call this temporary truth this temporary ceasefire ceasefire anymore",
+          "zh": "刚刚看到Sunt Com的最新声明，称最新一轮打击已经结束，但与此同时，很难再把这称为临时停火。",
+          "zh_highlights": [
+            "临时停火"
+          ],
+          "en_highlights": [
+            "temporary ceasefire"
+          ],
+          "relative_start": 4.460000000000036,
+          "relative_end": 14.060000000000002
+        },
+        {
+          "index": 3,
+          "start": 343.7,
+          "end": 353.3,
+          "en": "so this is what was announced back at the beginning of April because I mean what you've seen over the last couple of days or these trade-offs and strikes between the US and Iran",
+          "zh": "这是4月初宣布的。过去几天我们看到美伊之间的相互打击。",
+          "zh_highlights": [
+            "相互打击"
+          ],
+          "en_highlights": [
+            "trade-offs and strikes"
+          ],
+          "relative_start": 14.060000000000002,
+          "relative_end": 23.660000000000025
+        },
+        {
+          "index": 4,
+          "start": 353.3,
+          "end": 365.2,
+          "en": "and you've also seen some growing impatience from Donald Trump himself talking about how you know even if this latest round has been concluded he's threatened to continue bombing Iran if they don't come to the table and ultimately sign a deal",
+          "zh": "而且特朗普本人也越来越不耐烦，他威胁说即使最新一轮结束，如果伊朗不回到谈判桌并最终签署协议，他将继续轰炸伊朗。",
+          "zh_highlights": [
+            "继续轰炸伊朗"
+          ],
+          "en_highlights": [
+            "continue bombing Iran"
+          ],
+          "relative_start": 23.660000000000025,
+          "relative_end": 35.56
+        },
+        {
+          "index": 5,
+          "start": 365.2,
+          "end": 374.8,
+          "en": "so you do see that you know despite the fact that Trump has he's been kind of going back and forth over the past several weeks at this point over we're going to reach a deal we're close to reaching a deal",
+          "zh": "所以尽管特朗普在过去几周反复说我们将达成协议，我们接近达成协议，",
+          "zh_highlights": [
+            "反复说"
+          ],
+          "en_highlights": [
+            "going back and forth"
+          ],
+          "relative_start": 35.56,
+          "relative_end": 45.160000000000025
+        },
+        {
+          "index": 6,
+          "start": 374.8,
+          "end": 383.2,
+          "en": "at the same time obviously we're introducing some of these bombing campaigns I mean at this point it's really unclear how exactly we get both of these sides to the negotiating table",
+          "zh": "但同时我们又发动了这些轰炸行动。目前真的不清楚如何让双方坐到谈判桌前。",
+          "zh_highlights": [
+            "坐到谈判桌前"
+          ],
+          "en_highlights": [
+            "negotiating table"
+          ],
+          "relative_start": 45.160000000000025,
+          "relative_end": 53.56
+        },
+        {
+          "index": 7,
+          "start": 383.2,
+          "end": 388.1,
+          "en": "to the point where there's actually a longer lasting truth in place and I think you've got to take some",
+          "zh": "以实现更持久的和平。我认为必须考虑",
+          "zh_highlights": [
+            "更持久的和平"
+          ],
+          "en_highlights": [
+            "longer lasting truth"
+          ],
+          "relative_start": 53.56,
+          "relative_end": 58.460000000000036
+        }
+      ],
+      "speaker_context": "News desk managing editor",
+      "daily_speaker_index": 2
+    },
+    {
+      "start": 388.1,
+      "end": 443.6,
+      "speaker": "Jill Deezis",
+      "title": "Jill Deezis：伊朗反击美军舰队，能源市场再添变数",
+      "title_lines": [
+        "Jill Deezis",
+        "伊朗反击美军舰队",
+        "能源市场再添变数"
+      ],
+      "title_highlights": [
+        "伊朗反击美军舰队",
+        "能源市场再添变数"
+      ],
+      "subtitles": [
+        {
+          "index": 1,
+          "start": 388.1,
+          "end": 398.5,
+          "en": "of this recent action this military action from the US and say you know are we actually going to be able to go another 24 hours without seeing renewed strikes again. The latest from the other side",
+          "zh": "最近的军事行动，我们能否再过24小时而不看到新的打击？另一方的最新消息",
+          "zh_highlights": [
+            "新的打击"
+          ],
+          "en_highlights": [
+            "renewed strikes"
+          ],
+          "relative_start": 0.0,
+          "relative_end": 10.399999999999977
+        },
+        {
+          "index": 2,
+          "start": 398.5,
+          "end": 410.2,
+          "en": "Iran so we've heard some details on the straight-of-war moves and we also understand that they targeted the fifth fleet in Bahrain. Yes David so what we saw yesterday was that after that round of strikes",
+          "zh": "伊朗方面，我们听到了一些关于霍尔木兹海峡行动的细节，并且了解到他们瞄准了巴林的第五舰队。是的David，昨天我们看到的是，在那轮打击之后",
+          "zh_highlights": [
+            "霍尔木兹海峡行动",
+            "第五舰队"
+          ],
+          "en_highlights": [
+            "straight-of-war moves",
+            "fifth fleet"
+          ],
+          "relative_start": 10.399999999999977,
+          "relative_end": 22.099999999999966
+        },
+        {
+          "index": 3,
+          "start": 410.2,
+          "end": 419.4,
+          "en": "by the US you saw some targeted bombing or military strikes rather from Iran on the US Navy fleet in Bahrain. We saw some other reports of strikes in Jordan in Kuwait",
+          "zh": "美国发动打击后，伊朗对巴林的美军舰队进行了有针对性的轰炸或军事打击。我们还看到其他报道称约旦和科威特也遭到打击。",
+          "zh_highlights": [
+            "有针对性的轰炸"
+          ],
+          "en_highlights": [
+            "targeted bombing"
+          ],
+          "relative_start": 22.099999999999966,
+          "relative_end": 31.299999999999955
+        },
+        {
+          "index": 4,
+          "start": 419.4,
+          "end": 433.8,
+          "en": "so there was a little bit of that trade-off there although we haven't seen anything that rises to maybe the level of significance that you saw earlier this year I mean I'm thinking back to when Brent really spiked in March",
+          "zh": "所以有一些相互打击，但我们还没有看到像今年早些时候那样重大的事件。我回想3月份布伦特原油价格飙升的时候，",
+          "zh_highlights": [
+            "布伦特原油价格飙升"
+          ],
+          "en_highlights": [
+            "Brent really spiked"
+          ],
+          "relative_start": 31.299999999999955,
+          "relative_end": 45.69999999999999
+        },
+        {
+          "index": 5,
+          "start": 433.8,
+          "end": 443.6,
+          "en": "when there were you know that Katari on LNG plant that was targeted so we haven't seen anything like that at this stage. As for the straight-of-war moves again you're seeing some conflicting statements there",
+          "zh": "当时卡塔尔的液化天然气厂被瞄准。现阶段我们还没有看到类似情况。至于霍尔木兹海峡行动，你又看到一些相互矛盾的说法。",
+          "zh_highlights": [
+            "液化天然气厂被瞄准"
+          ],
+          "en_highlights": [
+            "LNG plant that was targeted"
+          ],
+          "relative_start": 45.69999999999999,
+          "relative_end": 55.5
+        }
+      ],
+      "speaker_context": "News desk managing editor",
+      "daily_speaker_index": 2
+    },
+    {
+      "start": 443.6,
+      "end": 496.6,
+      "speaker": "Jill Deezis",
+      "title": "Jill Deezis：霍尔木兹海峡争议，能源市场神经紧绷",
+      "title_lines": [
+        "Jill Deezis",
+        "霍尔木兹海峡争议",
+        "能源市场神经紧绷"
+      ],
+      "title_highlights": [
+        "霍尔木兹海峡争议",
+        "能源市场神经紧绷"
+      ],
+      "subtitles": [
+        {
+          "index": 1,
+          "start": 443.6,
+          "end": 453.8,
+          "en": "you've got Iran saying or you've got state TV rather in Iran saying that those straight-of-war moves is completely closed but then you also had Trump earlier today saying that commercial",
+          "zh": "伊朗国家电视台说霍尔木兹海峡完全关闭，但特朗普今天早些时候又说商业",
+          "zh_highlights": [
+            "霍尔木兹海峡完全关闭"
+          ],
+          "en_highlights": [
+            "completely closed"
+          ],
+          "relative_start": 0.0,
+          "relative_end": 10.199999999999989
+        },
+        {
+          "index": 2,
+          "start": 453.8,
+          "end": 464.5,
+          "en": "strips were able to transit through the straight-of-war moves and Trump really you know again with that Trump bluster saying that the US controls the straight-of-war moves",
+          "zh": "船只能够通过霍尔木兹海峡，特朗普又用他那种夸张的言辞说美国控制着霍尔木兹海峡。",
+          "zh_highlights": [
+            "美国控制着霍尔木兹海峡"
+          ],
+          "en_highlights": [
+            "US controls"
+          ],
+          "relative_start": 10.199999999999989,
+          "relative_end": 20.899999999999977
+        },
+        {
+          "index": 3,
+          "start": 464.5,
+          "end": 473.0,
+          "en": "so you do have those conflicting statements there obviously we saw a little bit of you know that that bump in Brent at the open today kind of indicating that you know the energy markets are looking at this and are having a lot",
+          "zh": "所以确实存在这些相互矛盾的说法。显然我们看到今天开盘布伦特原油价格有所波动，表明能源市场正在关注此事，并且非常",
+          "zh_highlights": [
+            "布伦特原油价格有所波动"
+          ],
+          "en_highlights": [
+            "bump in Brent"
+          ],
+          "relative_start": 20.899999999999977,
+          "relative_end": 29.399999999999977
+        },
+        {
+          "index": 4,
+          "start": 473.0,
+          "end": 482.3,
+          "en": "of jitters there so I think still some unresolved questions about how exactly you know ships are able to transit through the straight-of-war moves especially when there's this ongoing threat of these",
+          "zh": "紧张。所以我认为仍有一些未解决的问题，比如船只究竟如何通过霍尔木兹海峡，尤其是在存在持续威胁的情况下。",
+          "zh_highlights": [
+            "未解决的问题"
+          ],
+          "en_highlights": [
+            "unresolved questions"
+          ],
+          "relative_start": 29.399999999999977,
+          "relative_end": 38.69999999999999
+        },
+        {
+          "index": 5,
+          "start": 482.3,
+          "end": 491.8,
+          "en": "potential flare-ups you know from military strikes and such so again at this point very very",
+          "zh": "潜在的冲突升级，比如军事打击等。所以目前非常非常",
+          "zh_highlights": [
+            "潜在的冲突升级"
+          ],
+          "en_highlights": [
+            "potential flare-ups"
+          ],
+          "relative_start": 38.69999999999999,
+          "relative_end": 48.19999999999999
+        },
+        {
+          "index": 6,
+          "start": 491.8,
+          "end": 496.6,
+          "en": "latest line just from the last couple of minutes is that US Central Command is saying that this latest round has concluded",
+          "zh": "最新消息是，美国中央司令部表示最新一轮打击已经结束。",
+          "zh_highlights": [
+            "最新一轮打击已经结束"
+          ],
+          "en_highlights": [
+            "latest round has concluded"
+          ],
+          "relative_start": 48.19999999999999,
+          "relative_end": 53.0
+        }
+      ],
+      "speaker_context": "News desk managing editor",
+      "daily_speaker_index": 2
+    },
+    {
+      "start": 2992.1,
+      "end": 3068.0,
+      "speaker": "Two Hot",
+      "title": "Rubico亚洲固收主管：美联储按兵不动，高油价或已开始破坏需求",
+      "title_lines": [
+        "Rubico亚洲固收主管",
+        "美联储按兵不动",
+        "高油价或已开始破坏需求"
+      ],
+      "title_highlights": [
+        "按兵不动",
+        "破坏需求"
+      ],
+      "subtitles": [
+        {
+          "index": 1,
+          "start": 2992.1,
+          "end": 3003.6,
+          "en": "Let's bring in Two Hot, portfolio manager and Asia head of fixed income at Rubico. Two Hot, very nice to see you. Can we start with your assumptions in the macro?",
+          "zh": "有请Rubico投资组合经理兼亚洲固收主管Two Hot。Two Hot，很高兴见到你。我们先从宏观假设开始好吗？",
+          "zh_highlights": [
+            "宏观假设"
+          ],
+          "en_highlights": [
+            "macro"
+          ],
+          "relative_start": 0.0,
+          "relative_end": 11.5
+        },
+        {
+          "index": 2,
+          "start": 3003.6,
+          "end": 3014.3,
+          "en": "What do you think the next move from the Fed is going to be? Is it going to be a hike or a cut?",
+          "zh": "你认为美联储下一步会怎么做？加息还是降息？",
+          "zh_highlights": [
+            "美联储",
+            "加息"
+          ],
+          "en_highlights": [
+            "Fed",
+            "hike"
+          ],
+          "relative_start": 11.5,
+          "relative_end": 22.200000000000273
+        },
+        {
+          "index": 3,
+          "start": 3014.3,
+          "end": 3029.1,
+          "en": "No, we think they're going to keep it on hold. The reason is that the CPI number yesterday gives the FOMC enough reason to hold for now. I think a hike is a bit too early to be expected.",
+          "zh": "不，我们认为他们会按兵不动。原因是昨天的CPI数据给了美联储足够的理由暂时观望。我认为现在预期加息还为时过早。",
+          "zh_highlights": [
+            "按兵不动",
+            "CPI数据"
+          ],
+          "en_highlights": [
+            "on hold",
+            "CPI"
+          ],
+          "relative_start": 22.200000000000273,
+          "relative_end": 37.0
+        },
+        {
+          "index": 4,
+          "start": 3029.1,
+          "end": 3048.8,
+          "en": "Given the fact that the labor market has been holding up well, but one of the things we may be reading into the more cautious core numbers could be that because headlines is so high, consumers are actually being priced out of other stuff.",
+          "zh": "尽管劳动力市场表现良好，但我们从更谨慎的核心数据中解读出的信息是，由于整体通胀高企，消费者实际上被挤出其他消费。",
+          "zh_highlights": [
+            "劳动力市场",
+            "核心数据"
+          ],
+          "en_highlights": [
+            "labor market",
+            "core numbers"
+          ],
+          "relative_start": 37.0,
+          "relative_end": 56.70000000000027
+        },
+        {
+          "index": 5,
+          "start": 3048.8,
+          "end": 3068.0,
+          "en": "Therefore the demand isn't so strong in non-discretionary items. So we're going to watch that carefully as this is the first signs of demand destruction from the very strong higher energy prices.",
+          "zh": "因此非必需品的需求并不强劲。我们将密切关注，因为这可能是高能源价格导致需求破坏的首个迹象。",
+          "zh_highlights": [
+            "需求破坏",
+            "能源价格"
+          ],
+          "en_highlights": [
+            "demand destruction",
+            "energy prices"
+          ],
+          "relative_start": 56.70000000000027,
+          "relative_end": 75.90000000000009
+        }
+      ],
+      "speaker_context": "Portfolio Manager, Asia Head of Fixed Income at Rubico",
+      "daily_speaker_index": 3
+    },
+    {
+      "start": 3068.8,
+      "end": 3162.9,
+      "speaker": "Two Hot",
+      "title": "Rubico亚洲固收主管：美债收益率或见顶，长端仍有上行空间",
+      "title_lines": [
+        "Rubico亚洲固收主管",
+        "美债收益率或见顶",
+        "长端仍有上行空间"
+      ],
+      "title_highlights": [
+        "见顶",
+        "上行空间"
+      ],
+      "subtitles": [
+        {
+          "index": 1,
+          "start": 3068.8,
+          "end": 3084.4,
+          "en": "Where does that leave rates? When I look at the treasury curve, we're a little bit well above the 5% handle for the US 30-year yield. Do you think we've reached a peak?",
+          "zh": "这对利率意味着什么？看看国债收益率曲线，美国30年期收益率已经超过5%。你认为我们已经见顶了吗？",
+          "zh_highlights": [
+            "国债收益率",
+            "见顶"
+          ],
+          "en_highlights": [
+            "treasury curve",
+            "peak"
+          ],
+          "relative_start": 0.0,
+          "relative_end": 15.599999999999909
+        },
+        {
+          "index": 2,
+          "start": 3084.4,
+          "end": 3102.7,
+          "en": "We think in the short end, that feels like it's all done. We're quite constructive on the two to five years part of the curve. We don't think we're going to see any hikes anytime soon.",
+          "zh": "我们认为短端已经到位。我们对曲线2-5年期部分持建设性看法。我们不认为近期会有加息。",
+          "zh_highlights": [
+            "短端",
+            "建设性看法"
+          ],
+          "en_highlights": [
+            "short end",
+            "constructive"
+          ],
+          "relative_start": 15.599999999999909,
+          "relative_end": 33.899999999999636
+        },
+        {
+          "index": 3,
+          "start": 3102.7,
+          "end": 3125.6,
+          "en": "On the 30-year, I think we probably target more like 5.25% just because there is going to be a bit more concern on term risk premium and term premium being priced in as we expect inflation might become more embedded.",
+          "zh": "对于30年期，我们目标可能在5.25%左右，因为随着通胀可能变得更加根深蒂固，期限风险溢价将被定价。",
+          "zh_highlights": [
+            "期限风险溢价",
+            "通胀"
+          ],
+          "en_highlights": [
+            "term premium",
+            "inflation"
+          ],
+          "relative_start": 33.899999999999636,
+          "relative_end": 56.79999999999973
+        },
+        {
+          "index": 4,
+          "start": 3125.6,
+          "end": 3149.7,
+          "en": "Even if the core inflation comes down, we don't think that means inflation is going to be out of the way anytime soon. Since the war started, most fixed income strategies haven't done well. Do you think that continues?",
+          "zh": "即使核心通胀下降，我们也不认为通胀会很快消失。自战争开始以来，大多数固收策略表现不佳。你认为这种情况会持续吗？",
+          "zh_highlights": [
+            "核心通胀",
+            "固收策略"
+          ],
+          "en_highlights": [
+            "core inflation",
+            "fixed income"
+          ],
+          "relative_start": 56.79999999999973,
+          "relative_end": 80.89999999999964
+        },
+        {
+          "index": 5,
+          "start": 3149.7,
+          "end": 3162.9,
+          "en": "I think we're still relatively cautious on duration, although we're beginning to feel that the market is beginning to price in our scenarios of higher yields. So we're beginning to get there.",
+          "zh": "我认为我们对久期仍相对谨慎，尽管我们开始感觉到市场正在计入我们预期的高收益率情景。所以我们正在接近那个点。",
+          "zh_highlights": [
+            "久期",
+            "高收益率"
+          ],
+          "en_highlights": [
+            "duration",
+            "higher yields"
+          ],
+          "relative_start": 80.89999999999964,
+          "relative_end": 94.09999999999991
+        }
+      ],
+      "speaker_context": "Portfolio Manager, Asia Head of Fixed Income at Rubico",
+      "daily_speaker_index": 3
+    },
+    {
+      "start": 3162.9,
+      "end": 3240.0,
+      "speaker": "Two Hot",
+      "title": "Rubico亚洲固收主管：新兴市场分化，印尼政策制定者开始应对挑战",
+      "title_lines": [
+        "Rubico亚洲固收主管",
+        "新兴市场分化",
+        "印尼政策制定者开始应对挑战"
+      ],
+      "title_highlights": [
+        "新兴市场",
+        "印尼"
+      ],
+      "subtitles": [
+        {
+          "index": 1,
+          "start": 3162.9,
+          "end": 3183.1,
+          "en": "We're hoping that in the next few quarters, as we get a much clearer picture, that some of these levels will reach a level that they would be more stable and fixed income would be back in fashion. But it seems very hard given that everything is focused on the big textbooks right now.",
+          "zh": "我们希望未来几个季度，随着形势更加明朗，这些收益率水平将趋于稳定，固收将重新受到青睐。但鉴于目前一切都聚焦于宏观大叙事，这似乎很难。",
+          "zh_highlights": [
+            "固收",
+            "宏观大叙事"
+          ],
+          "en_highlights": [
+            "fixed income",
+            "big textbooks"
+          ],
+          "relative_start": 0.0,
+          "relative_end": 20.199999999999818
+        },
+        {
+          "index": 2,
+          "start": 3183.1,
+          "end": 3203.6,
+          "en": "That's true. You're seeing that dichotomy between what equities are looking at and what bond markets are pricing in. How do you look at EM right now? I know you have to be quite selective.",
+          "zh": "确实如此。你看到了股市和债市定价之间的分歧。你现在如何看待新兴市场？我知道你必须非常有选择性。",
+          "zh_highlights": [
+            "新兴市场",
+            "选择性"
+          ],
+          "en_highlights": [
+            "EM",
+            "selective"
+          ],
+          "relative_start": 20.199999999999818,
+          "relative_end": 40.69999999999982
+        },
+        {
+          "index": 3,
+          "start": 3203.6,
+          "end": 3225.8,
+          "en": "What are the clear winners and losers of this whole oil story? I look at a market like Indonesia where there is that commodity play, but the market seems to be focusing on fiscal concern, central bank independence. Have we heard enough from policymakers to reassure you?",
+          "zh": "这轮油价故事中明确的赢家和输家是什么？我看印尼这样的市场，有商品属性，但市场似乎关注财政担忧、央行独立性。政策制定者是否已经说得足够多来安抚你？",
+          "zh_highlights": [
+            "油价",
+            "印尼",
+            "央行独立性"
+          ],
+          "en_highlights": [
+            "oil",
+            "Indonesia",
+            "central bank independence"
+          ],
+          "relative_start": 40.69999999999982,
+          "relative_end": 62.90000000000009
+        },
+        {
+          "index": 4,
+          "start": 3225.8,
+          "end": 3240.0,
+          "en": "We were quite cautious of Indonesia earlier this year, but we're beginning to feel like the market consensus is moving, not quite there but nearly there, in actually dealing with some of these issues. I think policymakers are now beginning to address them.",
+          "zh": "今年早些时候我们对印尼相当谨慎，但我们开始感觉到市场共识正在转变，虽然尚未完全到位，但已接近，实际上正在处理其中一些问题。我认为政策制定者现在开始应对这些挑战。",
+          "zh_highlights": [
+            "印尼",
+            "政策制定者",
+            "应对挑战"
+          ],
+          "en_highlights": [
+            "Indonesia",
+            "policymakers",
+            "addressing"
+          ],
+          "relative_start": 62.90000000000009,
+          "relative_end": 77.09999999999991
+        }
+      ],
+      "speaker_context": "Portfolio Manager, Asia Head of Fixed Income at Rubico",
+      "daily_speaker_index": 3
+    }
+  ]
+}
