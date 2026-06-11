@@ -96,7 +96,21 @@ def transcribe(video_path: Path, transcript_path: Path, language: str, model_nam
         raise SystemExit("faster-whisper not installed. Run: pip install faster-whisper") from exc
 
     print(f"Loading Whisper model: {model_name}", flush=True)
-    model = WhisperModel(model_name, device="cpu", compute_type="int8")
+    # Retry model download in case of HuggingFace rate limits (429)
+    model = None
+    for attempt in range(5):
+        try:
+            model = WhisperModel(model_name, device="cpu", compute_type="int8")
+            break
+        except Exception as exc:
+            if "429" in str(exc) or "Too Many Requests" in str(exc):
+                wait = 30 * (attempt + 1)
+                print(f"HuggingFace rate limit hit, waiting {wait}s (attempt {attempt + 1}/5)...", flush=True)
+                time.sleep(wait)
+            else:
+                raise
+    if model is None:
+        raise SystemExit("Failed to download Whisper model after 5 retries (HuggingFace rate limit)")
 
     print("Transcribing...", flush=True)
     segments_iter, info = model.transcribe(

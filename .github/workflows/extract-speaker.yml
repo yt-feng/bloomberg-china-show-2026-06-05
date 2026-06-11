@@ -87,6 +87,7 @@ jobs:
       - name: Extract speaker clips
         env:
           PYTHONUNBUFFERED: "1"
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
           python tools/extract_speaker_clips.py \
