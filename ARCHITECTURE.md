@@ -83,6 +83,48 @@ The workflow should interrupt the operator only when the URL cannot be classifie
   - Remuxes into a temporary MP4 first, then atomically replaces the final output after success.
   - Tries strict `ffmpeg -c copy` remux first, then retries with corrupt-packet discard for isolated bad AAC packets.
 
+- `tools/resolve_china_show_url.py`
+  - Resolves the daily Bloomberg China Show URL.
+  - Defaults to yesterday in `Asia/Shanghai`, matching the scheduled 03:00 Beijing-time run.
+  - Uses Bloomberg's date pattern:
+
+```text
+https://www.bloomberg.com/news/videos/YYYY-MM-DD/the-china-show-M-D-YYYY-video
+```
+
+  - Writes `SHOW_DATE`, `SHOW_URL`, and `OUTPUT_DIR` into `GITHUB_ENV` for workflow steps.
+
+- `tools/transcribe_video.py`
+  - Transcribes the full downloaded show with `faster-whisper`.
+  - Uses CPU `int8` inference and retries HuggingFace model loading on transient 429 failures.
+  - Writes `work/daily/transcript.json` with absolute timestamps from the source video.
+
+- `tools/select_daily_speakers.py`
+  - Reads the full-show transcript and asks DeepSeek to identify non-anchor guest/keynote interview segments.
+  - Processes the show in overlapping transcript windows so the prompt stays bounded.
+  - Excludes anchors, hosts, reporters, correspondents, market-board updates, headlines, teasers, and transitions.
+  - Consolidates repeated detections by speaker name, merges nearby overlapping interview windows, scores candidates by importance/confidence/duration, and keeps the configured top speakers.
+  - Writes `work/daily/speakers.json`.
+
+- `tools/plan_daily_highlights.py`
+  - Iterates over `speakers.json`.
+  - Calls `tools/plan_speaker_highlights.py` once per selected speaker segment.
+  - Requests 3-5 high-quality clips per speaker, with each clip constrained to 30-150 seconds in the daily workflow.
+  - Combines all per-speaker plans into `work/daily/highlight_plan.json`, the format consumed by the renderer.
+
+- `tools/plan_speaker_highlights.py`
+  - Generates KC Desktop short-video clip plans for one speaker segment.
+  - Produces Chinese title lines, highlight terms, and bilingual subtitle entries.
+  - Supports optional `--min-clips` and `--max-clips` constraints for daily automation.
+  - Enforces clip duration bounds during post-processing and rejects host outros or market recaps.
+
+- `tools/render_clips_linux.py`
+  - Renders the final KC Desktop vertical clips on GitHub Actions.
+  - Uses Pillow overlay PNGs plus `ffmpeg`, avoiding platform-specific macOS text APIs.
+  - Applies the existing visual packaging, watermark, CTA, bilingual subtitles, highlight styling, and video/audio de-duplication filters.
+  - Supports explicit CJK font presets through `BBG_OVERLAY_FONT_PRESET`; the daily workflow defaults to `noto-serif-sc`.
+  - Uses a chunked render path for long clips with many subtitle overlays, so full/long speaker clips do not pass every subtitle PNG through the entire video duration.
+
 ## Preferred Data Flow
 
 The preferred path is the one-command orchestrator:
@@ -177,7 +219,12 @@ GitHub Actions-specific notes:
 - Keep `--yt-dlp-proxy-mode auto` so the job tries direct CDN first and uses the proxy only after a direct CDN failure.
 - Keep proxy subscription material in GitHub Secrets. Do not write decoded proxy nodes to logs.
 - Large Bloomberg episodes are commonly 3-4 GiB. Artifact upload can be the simplest proof of concept, but durable automation should allow an object-storage or release-asset upload step if artifact storage is too constrained.
-- A future scheduled "latest episode" workflow should resolve the newest Bloomberg China Show page URL first, then call the same one-URL command. That resolver should remain separate from the downloader so manual URL downloads stay predictable.
+- The scheduled daily clipping workflow is `.github/workflows/daily-china-show.yml`.
+  - Schedule: `0 19 * * *` UTC, which is 03:00 in `Asia/Shanghai`.
+  - Manual dispatch accepts `show_date`, `url`, `max_speakers`, `clips_per_speaker`, and `font_preset`.
+  - It resolves yesterday's China Show URL, downloads the show, transcribes the full video, selects keynote speakers, plans speaker highlights, renders KC Desktop formatted/de-duplicated clips, and commits generated outputs back to `main`.
+  - It writes committed outputs under `rendered-clips/YYYY-MM-DD/`, including MP4 files plus `show.json`, `speakers.json`, and `highlight_plan.json`.
+  - It uses `permissions: contents: write` and the default `GITHUB_TOKEN` to push the generated clip commit.
 
 ## yt-dlp Test Results And Cloud Shape
 
