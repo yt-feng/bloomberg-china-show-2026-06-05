@@ -1,0 +1,29 @@
+{
+  "show_date": "2026-06-12",
+  "source_transcript": "work/daily/transcript.json",
+  "max_speakers": 3,
+  "speakers": [
+    {
+      "speaker": "Tilly Zhang",
+      "speaker_context": "China technology and industrial policy analyst at Gavekal Dragonomics",
+      "segment_start": 1894.0,
+      "segment_end": 2156.0,
+      "duration": 262.0,
+      "confidence": 0.95,
+      "importance": 0.9,
+      "score": 3.187,
+      "reason": "Provides expert analysis on China's regulatory policy consistency, anti-monopoly campaign, and anti-involution measures, offering valuable insights for investors."
+    },
+    {
+      "speaker": "Winston Foo",
+      "speaker_context": "Founding partner and managing director at LDV Partners, a venture capital firm",
+      "segment_start": 736.72,
+      "segment_end": 956.77,
+      "duration": 220.05,
+      "confidence": 0.95,
+      "importance": 0.9,
+      "score": 3.117,
+      "reason": "Early investor in SpaceX discussing the company's evolution and IPO, providing unique insights as a venture capitalist."
+    }
+  ]
+}

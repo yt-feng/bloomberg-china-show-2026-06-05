@@ -1,0 +1,708 @@
+{
+  "show_date": "2026-06-12",
+  "source_transcript": "work/daily/transcript.json",
+  "source_speakers": "work/daily/speakers.json",
+  "plan_files": [
+    "work/daily/speaker_plans/01_Tilly_Zhang.json",
+    "work/daily/speaker_plans/02_Winston_Foo.json"
+  ],
+  "skipped_speakers": [],
+  "clips": [
+    {
+      "start": 1894.1,
+      "end": 1966.4,
+      "speaker": "Tilly Zhang",
+      "title": "龙洲经讯Tilly Zhang：政策一致性如何随市场调整？",
+      "title_lines": [
+        "龙洲经讯Tilly Zhang",
+        "政策一致性如何随市场调整？",
+        "解读宏观政策与市场现实的平衡"
+      ],
+      "title_highlights": [
+        "政策一致性",
+        "市场调整"
+      ],
+      "subtitles": [
+        {
+          "index": 1,
+          "start": 1894.1,
+          "end": 1900.2,
+          "en": "And I think the one thing it brings back to is maybe during 2022 is when they talked about how the regulatory policy should remain consistent with macro policy.",
+          "zh": "我认为这让人回想起2022年，当时他们谈到监管政策应与宏观政策保持一致。",
+          "zh_highlights": [
+            "保持一致"
+          ],
+          "en_highlights": [
+            "consistent with macro policy"
+          ],
+          "relative_start": 0.0,
+          "relative_end": 6.100000000000136
+        },
+        {
+          "index": 2,
+          "start": 1900.3,
+          "end": 1917.3,
+          "en": "Can you explain a little bit more the meaning of consistency and does that sort of meaning change now or is it basically the same?",
+          "zh": "您能解释一下一致性的含义吗？这种含义现在是否改变，还是基本不变？",
+          "zh_highlights": [
+            "一致性"
+          ],
+          "en_highlights": [
+            "consistency"
+          ],
+          "relative_start": 6.2000000000000455,
+          "relative_end": 23.200000000000045
+        },
+        {
+          "index": 3,
+          "start": 1918.5,
+          "end": 1929.2,
+          "en": "Well the consistent of policy is a political language. It basically means like to make policies like adjust your policy based on market reality.",
+          "zh": "政策一致性是一种政治语言，基本上意味着根据市场现实调整政策。",
+          "zh_highlights": [
+            "政策一致性",
+            "市场现实"
+          ],
+          "en_highlights": [
+            "consistent of policy",
+            "market reality"
+          ],
+          "relative_start": 24.40000000000009,
+          "relative_end": 35.100000000000136
+        },
+        {
+          "index": 4,
+          "start": 1929.3,
+          "end": 1942.3,
+          "en": "In the past, it probably means like when the market, when the economy is down, don't make your policy too harsh to ruin the market confidence. But like now when the market confidence getting restored and the economy gets slightly better, you probably want to build more future policies to improve the future market environment.",
+          "zh": "过去可能意味着当市场和经济下行时，政策不要太严厉以免破坏市场信心。但现在市场信心恢复、经济略有好转，你可能需要制定更多未来政策来改善市场环境。",
+          "zh_highlights": [
+            "市场信心",
+            "未来政策"
+          ],
+          "en_highlights": [
+            "market confidence",
+            "future policies"
+          ],
+          "relative_start": 35.200000000000045,
+          "relative_end": 48.200000000000045
+        },
+        {
+          "index": 5,
+          "start": 1953.8,
+          "end": 1966.4,
+          "en": "So like I think from the regulator perspective, make a consistent policy is like it's being adjusted over time, so make appropriate policy consistent with your economy environment.",
+          "zh": "所以从监管者角度看，制定一致的政策就是随着时间调整，使政策与经济环境相适应。",
+          "zh_highlights": [
+            "调整",
+            "经济环境"
+          ],
+          "en_highlights": [
+            "adjusted over time",
+            "economy environment"
+          ],
+          "relative_start": 59.700000000000045,
+          "relative_end": 72.30000000000018
+        }
+      ],
+      "speaker_context": "China technology and industrial policy analyst at Gavekal Dragonomics",
+      "daily_speaker_index": 1
+    },
+    {
+      "start": 1968.1,
+      "end": 2017.0,
+      "speaker": "Tilly Zhang",
+      "title": "龙洲经讯Tilly Zhang：国企也受反垄断监管，不只是民企",
+      "title_lines": [
+        "龙洲经讯Tilly Zhang",
+        "国企也受反垄断监管",
+        "不只是民企"
+      ],
+      "title_highlights": [
+        "国企",
+        "反垄断监管"
+      ],
+      "subtitles": [
+        {
+          "index": 1,
+          "start": 1968.1,
+          "end": 1978.7,
+          "en": "Tilly, you mentioned something earlier that and I hope you could talk a little bit more about that because I think the messaging that foreign investors will take from that could be important. You mentioned that state owned companies are also the subject of scrutiny that's happening right now.",
+          "zh": "Tilly，你之前提到国有企业也受到监管审查，外国投资者可能会从中解读出重要信号。",
+          "zh_highlights": [
+            "国有企业",
+            "监管审查"
+          ],
+          "en_highlights": [
+            "state owned companies",
+            "scrutiny"
+          ],
+          "relative_start": 0.0,
+          "relative_end": 10.600000000000136
+        },
+        {
+          "index": 2,
+          "start": 1989.3,
+          "end": 2001.8,
+          "en": "Well there are some examples such as the anti-monopoly campaign is sort of a big thing like they want to take down the monopoly behaviors. So like some state owned company such as China Talibao has been advertised on the state administration of market regulation website as well as an example of violating the anti-monopoly rules.",
+          "zh": "有一些例子，比如反垄断行动，他们想打击垄断行为。一些国企如中国铁塔也被市场监管总局网站列为违反反垄断规则的案例。",
+          "zh_highlights": [
+            "反垄断",
+            "中国铁塔"
+          ],
+          "en_highlights": [
+            "anti-monopoly",
+            "China Talibao"
+          ],
+          "relative_start": 21.200000000000045,
+          "relative_end": 33.700000000000045
+        },
+        {
+          "index": 3,
+          "start": 2011.6,
+          "end": 2017.0,
+          "en": "So it's not only targeting on private firms but also state owned enterprises can also fall on the scrutiny.",
+          "zh": "所以不仅针对民营企业，国有企业也会受到审查。",
+          "zh_highlights": [
+            "民营企业",
+            "国有企业"
+          ],
+          "en_highlights": [
+            "private firms",
+            "state owned enterprises"
+          ],
+          "relative_start": 43.5,
+          "relative_end": 48.90000000000009
+        }
+      ],
+      "speaker_context": "China technology and industrial policy analyst at Gavekal Dragonomics",
+      "daily_speaker_index": 1
+    },
+    {
+      "start": 2019.0,
+      "end": 2123.5,
+      "speaker": "Tilly Zhang",
+      "title": "龙洲经讯Tilly Zhang：反内卷效果有限，价格战仍在持续",
+      "title_lines": [
+        "龙洲经讯Tilly Zhang",
+        "反内卷效果有限",
+        "价格战仍在持续"
+      ],
+      "title_highlights": [
+        "反内卷",
+        "价格战"
+      ],
+      "subtitles": [
+        {
+          "index": 1,
+          "start": 2019.0,
+          "end": 2028.2,
+          "en": "Tilly, what does this mean for these companies? Now I'm just wondering we saw the sort of a negative reaction to all this news leading up to it.",
+          "zh": "Tilly，这对这些公司意味着什么？我们看到市场对这些消息有负面反应。",
+          "zh_highlights": [
+            "负面反应"
+          ],
+          "en_highlights": [
+            "negative reaction"
+          ],
+          "relative_start": 0.0,
+          "relative_end": 9.200000000000045
+        },
+        {
+          "index": 2,
+          "start": 2028.2,
+          "end": 2045.3,
+          "en": "Do these, you know, the scolding, even without punishment, do you think that helps or at least changes the operations of these companies? Do you think, how effective do you think it really is in terms of ending some of these price wars and the competition in these industries now?",
+          "zh": "这种批评即使没有惩罚，是否有助于改变这些公司的运营？你认为在结束价格战和行业竞争方面效果如何？",
+          "zh_highlights": [
+            "批评",
+            "价格战"
+          ],
+          "en_highlights": [
+            "scolding",
+            "price wars"
+          ],
+          "relative_start": 9.200000000000045,
+          "relative_end": 26.299999999999955
+        },
+        {
+          "index": 3,
+          "start": 2046.3,
+          "end": 2058.9,
+          "en": "Well it's actually quite hard because if you think of the anti-involution campaign starts from last year, it's like the government has been using lots of the hard rules but instead of more of the softer measures such as like calling them into a meeting and talk them out of the price war.",
+          "zh": "实际上很难，因为反内卷运动从去年开始，政府用了很多硬性规定，但更多的是软性措施，比如召集开会劝说他们退出价格战。",
+          "zh_highlights": [
+            "反内卷",
+            "软性措施"
+          ],
+          "en_highlights": [
+            "anti-involution",
+            "softer measures"
+          ],
+          "relative_start": 27.299999999999955,
+          "relative_end": 39.90000000000009
+        },
+        {
+          "index": 4,
+          "start": 2064.0,
+          "end": 2078.0,
+          "en": "But it has worked on some specific sectors like on the policy icon they had more specific rules but unlike some other sectors like food delivery you can see companies are still engaging in price war and over competing with each other because they are market share conversation considerations.",
+          "zh": "但在某些特定行业有效，比如光伏有更具体的规定；而其他行业如外卖，公司仍在打价格战，过度竞争，因为要考虑市场份额。",
+          "zh_highlights": [
+            "光伏",
+            "外卖",
+            "价格战"
+          ],
+          "en_highlights": [
+            "policy icon",
+            "food delivery",
+            "price war"
+          ],
+          "relative_start": 45.0,
+          "relative_end": 59.0
+        },
+        {
+          "index": 5,
+          "start": 2085.3,
+          "end": 2098.3,
+          "en": "So like from the regulator perspective, the anti-involution campaign and the end of this price war is more of the sector to sector tailored measures. So because unlike previously on the over capacity on state on the sectors now this over capacity issues are happening in more private sectors and also on more like the immersion technology sector such as EV and solar panel.",
+          "zh": "所以从监管者角度看，反内卷和结束价格战更多是行业量身定制的措施。因为与之前不同，产能过剩问题现在更多出现在私营部门和新兴技术领域，如电动汽车和太阳能板。",
+          "zh_highlights": [
+            "量身定制",
+            "产能过剩",
+            "电动汽车",
+            "太阳能板"
+          ],
+          "en_highlights": [
+            "tailored measures",
+            "over capacity",
+            "EV",
+            "solar panel"
+          ],
+          "relative_start": 66.30000000000018,
+          "relative_end": 79.30000000000018
+        },
+        {
+          "index": 6,
+          "start": 2111.6,
+          "end": 2123.5,
+          "en": "So they don't want to get into hard on this companies but more of like finding out what are the problem matters through like tailored solutions for each industry specifically.",
+          "zh": "所以他们不想对这些公司采取强硬手段，而是通过为每个行业量身定制解决方案来找出问题所在。",
+          "zh_highlights": [
+            "量身定制解决方案"
+          ],
+          "en_highlights": [
+            "tailored solutions"
+          ],
+          "relative_start": 92.59999999999991,
+          "relative_end": 104.5
+        }
+      ],
+      "speaker_context": "China technology and industrial policy analyst at Gavekal Dragonomics",
+      "daily_speaker_index": 1
+    },
+    {
+      "start": 762.2,
+      "end": 808.4,
+      "speaker": "Winston Foo",
+      "title": "LDV合伙人Winston Foo：寻找现代达芬奇，SpaceX的护城河有多深？",
+      "title_lines": [
+        "LDV合伙人Winston Foo",
+        "寻找现代达芬奇",
+        "SpaceX的护城河有多深？"
+      ],
+      "title_highlights": [
+        "现代达芬奇",
+        "护城河"
+      ],
+      "subtitles": [
+        {
+          "index": 1,
+          "start": 762.2,
+          "end": 767.4,
+          "en": "I can't speak for what people are looking at it today.",
+          "zh": "我无法代表今天人们如何看待它。",
+          "zh_highlights": [
+            "无法代表"
+          ],
+          "en_highlights": [
+            "can't speak"
+          ],
+          "relative_start": 0.0,
+          "relative_end": 5.199999999999932
+        },
+        {
+          "index": 2,
+          "start": 767.4,
+          "end": 772.4,
+          "en": "You've had lots of experts at Bloomberg himself talk about it.",
+          "zh": "彭博社有很多专家在讨论。",
+          "zh_highlights": [
+            "彭博社",
+            "专家"
+          ],
+          "en_highlights": [
+            "experts",
+            "Bloomberg"
+          ],
+          "relative_start": 5.199999999999932,
+          "relative_end": 10.199999999999932
+        },
+        {
+          "index": 3,
+          "start": 773.6,
+          "end": 780.9,
+          "en": "You know, we as early stage investors at LDV we always look for great entrepreneurs and a strong moat for the business.",
+          "zh": "作为LDV的早期参与者，我们始终寻找优秀的企业家和强大的商业护城河。",
+          "zh_highlights": [
+            "早期参与者",
+            "护城河"
+          ],
+          "en_highlights": [
+            "early stage",
+            "strong moat"
+          ],
+          "relative_start": 11.399999999999977,
+          "relative_end": 18.699999999999932
+        },
+        {
+          "index": 4,
+          "start": 786.0,
+          "end": 793.5,
+          "en": "And so this has been an incredible ride.",
+          "zh": "这是一段不可思议的旅程。",
+          "zh_highlights": [
+            "不可思议"
+          ],
+          "en_highlights": [
+            "incredible ride"
+          ],
+          "relative_start": 23.799999999999955,
+          "relative_end": 31.299999999999955
+        },
+        {
+          "index": 5,
+          "start": 793.5,
+          "end": 799.7,
+          "en": "And as you said, we're early stage investors.",
+          "zh": "正如你所说，我们是早期参与者。",
+          "zh_highlights": [
+            "早期参与者"
+          ],
+          "en_highlights": [
+            "early stage"
+          ],
+          "relative_start": 31.299999999999955,
+          "relative_end": 37.5
+        },
+        {
+          "index": 6,
+          "start": 800.8,
+          "end": 808.4,
+          "en": "LDV is named in honor of Leonardo da Vinci. And so we look to back modern day da Vinci's in the CEOs.",
+          "zh": "LDV以达芬奇命名，所以我们支持CEO中的现代达芬奇。",
+          "zh_highlights": [
+            "达芬奇",
+            "现代达芬奇"
+          ],
+          "en_highlights": [
+            "Leonardo da Vinci",
+            "modern day da Vinci"
+          ],
+          "relative_start": 38.59999999999991,
+          "relative_end": 46.19999999999993
+        }
+      ],
+      "speaker_context": "Founding partner and managing director at LDV Partners, a venture capital firm",
+      "daily_speaker_index": 2
+    },
+    {
+      "start": 811.0,
+      "end": 851.8,
+      "speaker": "Winston Foo",
+      "title": "SpaceX从火箭公司到AI巨头？LDV合伙人：平台型企业的进化逻辑",
+      "title_lines": [
+        "LDV合伙人Winston Foo",
+        "SpaceX从火箭到AI？",
+        "平台型企业的进化逻辑"
+      ],
+      "title_highlights": [
+        "平台型企业",
+        "进化逻辑"
+      ],
+      "subtitles": [
+        {
+          "index": 1,
+          "start": 811.0,
+          "end": 816.4,
+          "en": "How do you look at this modern day da Vinci now? SpaceX before was all about rocket launches and providing satellite broadband for internet.",
+          "zh": "你现在怎么看这个现代达芬奇？SpaceX以前主要是火箭发射和卫星宽带。",
+          "zh_highlights": [
+            "现代达芬奇",
+            "火箭发射"
+          ],
+          "en_highlights": [
+            "modern day da Vinci",
+            "rocket launches"
+          ],
+          "relative_start": 0.0,
+          "relative_end": 5.399999999999977
+        },
+        {
+          "index": 2,
+          "start": 821.5,
+          "end": 827.9,
+          "en": "Now it's almost becoming this aspiring AI juggernaut. How do you view this company now?",
+          "zh": "现在它几乎要成为AI巨头。你现在怎么看这家公司？",
+          "zh_highlights": [
+            "AI巨头"
+          ],
+          "en_highlights": [
+            "AI juggernaut"
+          ],
+          "relative_start": 10.5,
+          "relative_end": 16.899999999999977
+        },
+        {
+          "index": 3,
+          "start": 831.2,
+          "end": 846.3,
+          "en": "Again, because of the quiet period, I would just point you to the perspective of this, but in general, what technology companies can build platforms and then those who earn the right build applications on top of those platforms.",
+          "zh": "由于静默期，我只能提供一般视角：科技公司可以构建平台，然后有资格的公司可以在平台上构建应用。",
+          "zh_highlights": [
+            "构建平台",
+            "构建应用"
+          ],
+          "en_highlights": [
+            "build platforms",
+            "build applications"
+          ],
+          "relative_start": 20.200000000000045,
+          "relative_end": 35.299999999999955
+        },
+        {
+          "index": 4,
+          "start": 846.3,
+          "end": 851.8,
+          "en": "And then those who earn the right build applications on top of those platforms.",
+          "zh": "然后有资格的公司可以在平台上构建应用。",
+          "zh_highlights": [
+            "有资格",
+            "构建应用"
+          ],
+          "en_highlights": [
+            "earn the right",
+            "build applications"
+          ],
+          "relative_start": 35.299999999999955,
+          "relative_end": 40.799999999999955
+        }
+      ],
+      "speaker_context": "Founding partner and managing director at LDV Partners, a venture capital firm",
+      "daily_speaker_index": 2
+    },
+    {
+      "start": 858.6,
+      "end": 900.5,
+      "speaker": "Winston Foo",
+      "title": "面对质疑，LDV合伙人：每个公司都有它的评判者，时间会证明",
+      "title_lines": [
+        "LDV合伙人Winston Foo",
+        "面对质疑",
+        "每个公司都有它的评判者，时间会证明"
+      ],
+      "title_highlights": [
+        "质疑",
+        "时间会证明"
+      ],
+      "subtitles": [
+        {
+          "index": 1,
+          "start": 858.6,
+          "end": 865.6,
+          "en": "What do you make of some that are maybe not as hopeful as you, right? The likes of Jim Chanos, for example, saying that this is a hopes and dreams IPO.",
+          "zh": "你怎么看那些不那么乐观的人？比如Jim Chanos说这是希望和梦想的IPO。",
+          "zh_highlights": [
+            "不那么乐观",
+            "希望和梦想"
+          ],
+          "en_highlights": [
+            "not as hopeful",
+            "hopes and dreams IPO"
+          ],
+          "relative_start": 0.0,
+          "relative_end": 7.0
+        },
+        {
+          "index": 2,
+          "start": 869.8,
+          "end": 876.5,
+          "en": "You look at the fundamentals and this is a company that is not making money yet. Or at least the revenue numbers are not really justifying this massive valuation.",
+          "zh": "看基本面，这家公司还没盈利，营收数字难以支撑如此高的估值。",
+          "zh_highlights": [
+            "基本面",
+            "盈利",
+            "估值"
+          ],
+          "en_highlights": [
+            "fundamentals",
+            "not making money",
+            "valuation"
+          ],
+          "relative_start": 11.199999999999932,
+          "relative_end": 17.899999999999977
+        },
+        {
+          "index": 3,
+          "start": 879.0,
+          "end": 886.7,
+          "en": "What's the argument against that now?",
+          "zh": "对此有什么反驳？",
+          "zh_highlights": [
+            "反驳"
+          ],
+          "en_highlights": [
+            "argument against"
+          ],
+          "relative_start": 20.399999999999977,
+          "relative_end": 28.100000000000023
+        },
+        {
+          "index": 4,
+          "start": 886.7,
+          "end": 895.6,
+          "en": "I think the great thing about investing and company building is that at the end of the day there's a crack refer for everyone.",
+          "zh": "我认为参与和公司建设的美妙之处在于，最终每个人都有自己的评判标准。",
+          "zh_highlights": [
+            "评判标准"
+          ],
+          "en_highlights": [
+            "crack refer"
+          ],
+          "relative_start": 28.100000000000023,
+          "relative_end": 37.0
+        },
+        {
+          "index": 5,
+          "start": 896.2,
+          "end": 900.5,
+          "en": "And so we shall see with time.",
+          "zh": "所以时间会证明一切。",
+          "zh_highlights": [
+            "时间会证明"
+          ],
+          "en_highlights": [
+            "see with time"
+          ],
+          "relative_start": 37.60000000000002,
+          "relative_end": 41.89999999999998
+        }
+      ],
+      "speaker_context": "Founding partner and managing director at LDV Partners, a venture capital firm",
+      "daily_speaker_index": 2
+    },
+    {
+      "start": 903.1,
+      "end": 953.6,
+      "speaker": "Winston Foo",
+      "title": "SpaceX是太空公司还是AI公司？LDV合伙人：市场正在快速增长",
+      "title_lines": [
+        "LDV合伙人Winston Foo",
+        "SpaceX是太空还是AI？",
+        "市场正在快速增长"
+      ],
+      "title_highlights": [
+        "太空",
+        "AI",
+        "快速增长"
+      ],
+      "subtitles": [
+        {
+          "index": 1,
+          "start": 903.1,
+          "end": 911.3,
+          "en": "Okay, so what are people buying here? Just to rephrase my earlier question, is this a space company? Is this an AI company? Is it somewhere in between that?",
+          "zh": "那么人们在这里买的是什么？换个说法，这是一家太空公司？AI公司？还是介于两者之间？",
+          "zh_highlights": [
+            "太空公司",
+            "AI公司"
+          ],
+          "en_highlights": [
+            "space company",
+            "AI company"
+          ],
+          "relative_start": 0.0,
+          "relative_end": 8.199999999999932
+        },
+        {
+          "index": 2,
+          "start": 913.9,
+          "end": 923.8,
+          "en": "In other words, what's the type of multiple people should be attaching to a company like this?",
+          "zh": "换句话说，人们应该给这样的公司什么样的估值倍数？",
+          "zh_highlights": [
+            "估值倍数"
+          ],
+          "en_highlights": [
+            "multiple"
+          ],
+          "relative_start": 10.799999999999955,
+          "relative_end": 20.699999999999932
+        },
+        {
+          "index": 3,
+          "start": 924.4,
+          "end": 932.8,
+          "en": "Well, the concept forms of exactly what this company could become. Yeah, again, I would point you towards the perspective and what's on publicly available.",
+          "zh": "这家公司可能成为什么形态。我再次建议你参考公开信息。",
+          "zh_highlights": [
+            "形态",
+            "公开信息"
+          ],
+          "en_highlights": [
+            "concept forms",
+            "publicly available"
+          ],
+          "relative_start": 21.299999999999955,
+          "relative_end": 29.699999999999932
+        },
+        {
+          "index": 4,
+          "start": 939.4,
+          "end": 945.0,
+          "en": "It's a terrific time for the space tech market in general.",
+          "zh": "总的来说，现在是太空技术市场的绝佳时机。",
+          "zh_highlights": [
+            "太空技术市场",
+            "绝佳时机"
+          ],
+          "en_highlights": [
+            "space tech market",
+            "terrific time"
+          ],
+          "relative_start": 36.299999999999955,
+          "relative_end": 41.89999999999998
+        },
+        {
+          "index": 5,
+          "start": 946.2,
+          "end": 953.6,
+          "en": "And the market's growing incredibly fast. And there's a lot of applications to be built in space.",
+          "zh": "市场增长非常快，太空中有很多应用可以构建。",
+          "zh_highlights": [
+            "增长非常快",
+            "构建应用"
+          ],
+          "en_highlights": [
+            "growing incredibly fast",
+            "applications"
+          ],
+          "relative_start": 43.10000000000002,
+          "relative_end": 50.5
+        }
+      ],
+      "speaker_context": "Founding partner and managing director at LDV Partners, a venture capital firm",
+      "daily_speaker_index": 2
+    }
+  ]
+}
