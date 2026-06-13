@@ -1,0 +1,1015 @@
+{
+  "show_date": "2026-06-13",
+  "source_transcript": "work/daily/transcript.json",
+  "source_speakers": "work/daily/speakers.json",
+  "plan_files": [
+    "work/daily/speaker_plans/01_William_D_Cohan.json"
+  ],
+  "skipped_speakers": [],
+  "clips": [
+    {
+      "start": 2297.0,
+      "end": 2347.0,
+      "speaker": "William D. Cohan",
+      "title": "耶鲁管理学院执行研究员：马斯克财富堪比洛克菲勒，但权力更甚",
+      "title_lines": [
+        "耶鲁管理学院执行研究员",
+        "马斯克财富堪比洛克菲勒",
+        "但权力更甚"
+      ],
+      "title_highlights": [
+        "马斯克",
+        "洛克菲勒",
+        "权力"
+      ],
+      "subtitles": [
+        {
+          "index": 1,
+          "start": 2297.0,
+          "end": 2304.0,
+          "en": "He's an executive fellow, excuse me, at the Yale School of Management. All right, break it down.",
+          "zh": "他是耶鲁管理学院的执行研究员。好，来分析一下。",
+          "zh_highlights": [
+            "耶鲁管理学院"
+          ],
+          "en_highlights": [
+            "Yale School of Management"
+          ],
+          "relative_start": 0.0,
+          "relative_end": 7.0
+        },
+        {
+          "index": 2,
+          "start": 2304.0,
+          "end": 2313.0,
+          "en": "It's hard to compare Musk to kings and queens and heads of state because they had things at their disposal and hard currencies that he kind of doesn't.",
+          "zh": "很难将马斯克与国王、女王或国家元首相提并论，因为他们拥有他无法企及的资源和硬通货。",
+          "zh_highlights": [
+            "马斯克",
+            "国家元首"
+          ],
+          "en_highlights": [
+            "Musk",
+            "heads of state"
+          ],
+          "relative_start": 7.0,
+          "relative_end": 16.0
+        },
+        {
+          "index": 3,
+          "start": 2313.0,
+          "end": 2319.0,
+          "en": "But is this kind of private citizen wealth unprecedented in the monitored, written history of the world?",
+          "zh": "但这种私人财富规模在有记载的世界历史中是否前所未有？",
+          "zh_highlights": [
+            "私人财富",
+            "前所未有"
+          ],
+          "en_highlights": [
+            "private citizen wealth",
+            "unprecedented"
+          ],
+          "relative_start": 16.0,
+          "relative_end": 22.0
+        },
+        {
+          "index": 4,
+          "start": 2319.0,
+          "end": 2322.0,
+          "en": "It's not completely unprecedented.",
+          "zh": "并非完全前所未有。",
+          "zh_highlights": [
+            "并非完全"
+          ],
+          "en_highlights": [
+            "not completely unprecedented"
+          ],
+          "relative_start": 22.0,
+          "relative_end": 25.0
+        },
+        {
+          "index": 5,
+          "start": 2322.0,
+          "end": 2332.0,
+          "en": "John D. Rockefeller probably controlled roughly the same size of US GDP in terms of his wealth compared to the scale of the country.",
+          "zh": "约翰·D·洛克菲勒的财富占美国GDP的比例，大概与马斯克相当。",
+          "zh_highlights": [
+            "洛克菲勒",
+            "GDP"
+          ],
+          "en_highlights": [
+            "John D. Rockefeller",
+            "US GDP"
+          ],
+          "relative_start": 25.0,
+          "relative_end": 35.0
+        },
+        {
+          "index": 6,
+          "start": 2332.0,
+          "end": 2339.0,
+          "en": "The estimates vary, but two and a half to three percent, so he was somewhere between a little bit below Musk and a little bit above.",
+          "zh": "估算值在2.5%到3%之间，所以他略低于或略高于马斯克。",
+          "zh_highlights": [
+            "2.5%到3%"
+          ],
+          "en_highlights": [
+            "two and a half to three percent"
+          ],
+          "relative_start": 35.0,
+          "relative_end": 42.0
+        },
+        {
+          "index": 7,
+          "start": 2339.0,
+          "end": 2342.0,
+          "en": "The corner of the realm here is power, as you point out, in your piece.",
+          "zh": "正如你在文章中所指出的，核心在于权力。",
+          "zh_highlights": [
+            "权力"
+          ],
+          "en_highlights": [
+            "power"
+          ],
+          "relative_start": 42.0,
+          "relative_end": 45.0
+        },
+        {
+          "index": 8,
+          "start": 2342.0,
+          "end": 2344.0,
+          "en": "That's what you can get if you have a lot of money.",
+          "zh": "这就是你拥有巨额财富所能得到的。",
+          "zh_highlights": [
+            "巨额财富"
+          ],
+          "en_highlights": [
+            "a lot of money"
+          ],
+          "relative_start": 45.0,
+          "relative_end": 47.0
+        },
+        {
+          "index": 9,
+          "start": 2344.0,
+          "end": 2347.0,
+          "en": "We've seen Elon Musk exercise that before he became a trillionaire.",
+          "zh": "我们在埃隆·马斯克成为万亿富翁之前就见过他行使这种权力。",
+          "zh_highlights": [
+            "万亿富翁",
+            "行使权力"
+          ],
+          "en_highlights": [
+            "trillionaire",
+            "exercise"
+          ],
+          "relative_start": 47.0,
+          "relative_end": 50.0
+        }
+      ],
+      "speaker_context": "Executive Fellow at Yale School of Management",
+      "daily_speaker_index": 1
+    },
+    {
+      "start": 2347.0,
+      "end": 2425.0,
+      "speaker": "William D. Cohan",
+      "title": "耶鲁研究员：马斯克用财富左右政治，慈善捐赠不足0.1%",
+      "title_lines": [
+        "耶鲁研究员",
+        "马斯克用财富左右政治",
+        "慈善捐赠不足0.1%"
+      ],
+      "title_highlights": [
+        "左右政治",
+        "慈善捐赠"
+      ],
+      "subtitles": [
+        {
+          "index": 1,
+          "start": 2347.0,
+          "end": 2353.0,
+          "en": "He bought Twitter, now X. He kind of controls the way that we talk and communicate with one another at least some of us.",
+          "zh": "他收购了推特（现X），某种程度上控制着我们彼此交流的方式——至少对部分人而言。",
+          "zh_highlights": [
+            "收购推特",
+            "控制交流"
+          ],
+          "en_highlights": [
+            "bought Twitter",
+            "controls the way we talk"
+          ],
+          "relative_start": 0.0,
+          "relative_end": 6.0
+        },
+        {
+          "index": 2,
+          "start": 2353.0,
+          "end": 2356.0,
+          "en": "He spent an awful lot of money on the last election.",
+          "zh": "他在上次选举中投入了巨额资金。",
+          "zh_highlights": [
+            "巨额资金",
+            "选举"
+          ],
+          "en_highlights": [
+            "spent an awful lot",
+            "election"
+          ],
+          "relative_start": 6.0,
+          "relative_end": 9.0
+        },
+        {
+          "index": 3,
+          "start": 2356.0,
+          "end": 2359.0,
+          "en": "He intends to do so on the next election.",
+          "zh": "他打算在下一次选举中继续这么做。",
+          "zh_highlights": [
+            "下一次选举"
+          ],
+          "en_highlights": [
+            "next election"
+          ],
+          "relative_start": 9.0,
+          "relative_end": 12.0
+        },
+        {
+          "index": 4,
+          "start": 2359.0,
+          "end": 2367.0,
+          "en": "Talk a bit about the way in which a person of his means and gets a singular thing where somebody who has the amount of money that he has can wield influence.",
+          "zh": "谈谈像他这样拥有巨额财富的人，如何能够施加影响力。",
+          "zh_highlights": [
+            "施加影响力"
+          ],
+          "en_highlights": [
+            "wield influence"
+          ],
+          "relative_start": 12.0,
+          "relative_end": 20.0
+        },
+        {
+          "index": 5,
+          "start": 2367.0,
+          "end": 2376.0,
+          "en": "Not just on building libraries, civic life, artistic life in this country, but can really kind of change the way that power is controlled in a country like the US.",
+          "zh": "不仅仅是建设图书馆、公民生活、艺术生活，而是真正改变像美国这样的国家中权力被控制的方式。",
+          "zh_highlights": [
+            "改变权力控制方式"
+          ],
+          "en_highlights": [
+            "change the way power is controlled"
+          ],
+          "relative_start": 20.0,
+          "relative_end": 29.0
+        },
+        {
+          "index": 6,
+          "start": 2377.0,
+          "end": 2380.0,
+          "en": "Yeah, I mean, and the scale of that is it's kind of hard to process.",
+          "zh": "是的，这种规模令人难以想象。",
+          "zh_highlights": [
+            "规模"
+          ],
+          "en_highlights": [
+            "scale"
+          ],
+          "relative_start": 30.0,
+          "relative_end": 33.0
+        },
+        {
+          "index": 7,
+          "start": 2380.0,
+          "end": 2385.0,
+          "en": "I mean, the way I was thinking about it last night is Sergei Brenn is the second wealthiest person in the world.",
+          "zh": "昨晚我想到，谢尔盖·布林是世界第二富有的人。",
+          "zh_highlights": [
+            "谢尔盖·布林"
+          ],
+          "en_highlights": [
+            "Sergei Brenn"
+          ],
+          "relative_start": 33.0,
+          "relative_end": 38.0
+        },
+        {
+          "index": 8,
+          "start": 2385.0,
+          "end": 2390.0,
+          "en": "And you and I are much, much, much closer to Sergei Brenn than Sergei Brenn is Delana.",
+          "zh": "而你我和谢尔盖·布林之间的差距，远小于谢尔盖·布林与马斯克之间的差距。",
+          "zh_highlights": [
+            "差距"
+          ],
+          "en_highlights": [
+            "much closer"
+          ],
+          "relative_start": 38.0,
+          "relative_end": 43.0
+        },
+        {
+          "index": 9,
+          "start": 2390.0,
+          "end": 2392.0,
+          "en": "Cheers me, God, I'm to hear that.",
+          "zh": "这让我感到欣慰。",
+          "zh_highlights": [],
+          "en_highlights": [],
+          "relative_start": 43.0,
+          "relative_end": 45.0
+        },
+        {
+          "index": 10,
+          "start": 2392.0,
+          "end": 2395.0,
+          "en": "I think that makes me feel worse.",
+          "zh": "我觉得这让我感觉更糟了。",
+          "zh_highlights": [],
+          "en_highlights": [],
+          "relative_start": 45.0,
+          "relative_end": 48.0
+        },
+        {
+          "index": 11,
+          "start": 2395.0,
+          "end": 2397.0,
+          "en": "I don't like that.",
+          "zh": "我不喜欢这样。",
+          "zh_highlights": [],
+          "en_highlights": [],
+          "relative_start": 48.0,
+          "relative_end": 50.0
+        },
+        {
+          "index": 12,
+          "start": 2398.0,
+          "end": 2400.0,
+          "en": "And, and must himself, right?",
+          "zh": "而马斯克本人呢？",
+          "zh_highlights": [
+            "马斯克"
+          ],
+          "en_highlights": [
+            "Musk"
+          ],
+          "relative_start": 51.0,
+          "relative_end": 53.0
+        },
+        {
+          "index": 13,
+          "start": 2400.0,
+          "end": 2407.0,
+          "en": "So, you know, sort of in the Andrew Carnegie tradition for the United States, people of this kind of wealth, like we sort of expected to give lots of charity.",
+          "zh": "在美国，像安德鲁·卡内基那样的传统，拥有这种财富的人通常被期望进行大量慈善捐赠。",
+          "zh_highlights": [
+            "慈善捐赠"
+          ],
+          "en_highlights": [
+            "charity"
+          ],
+          "relative_start": 53.0,
+          "relative_end": 60.0
+        },
+        {
+          "index": 14,
+          "start": 2407.0,
+          "end": 2411.0,
+          "en": "So you said libraries, universities, things like that must doesn't do that, right?",
+          "zh": "所以你说图书馆、大学之类的，马斯克并没有这样做，对吧？",
+          "zh_highlights": [
+            "马斯克"
+          ],
+          "en_highlights": [
+            "Musk"
+          ],
+          "relative_start": 60.0,
+          "relative_end": 64.0
+        },
+        {
+          "index": 15,
+          "start": 2411.0,
+          "end": 2416.0,
+          "en": "Must total charitable giving looks like something well under 0.1% of his total of his total net worth.",
+          "zh": "马斯克的慈善捐赠总额远低于其净资产的0.1%。",
+          "zh_highlights": [
+            "0.1%"
+          ],
+          "en_highlights": [
+            "0.1%"
+          ],
+          "relative_start": 64.0,
+          "relative_end": 69.0
+        },
+        {
+          "index": 16,
+          "start": 2416.0,
+          "end": 2425.0,
+          "en": "So what you're seeing is what you can buy with power is one way to put it is the most expensive Senate race in history.",
+          "zh": "所以你所看到的是，用权力可以买到的东西——可以说是有史以来最昂贵的参议院竞选。",
+          "zh_highlights": [
+            "最昂贵的参议院竞选"
+          ],
+          "en_highlights": [
+            "most expensive Senate race"
+          ],
+          "relative_start": 69.0,
+          "relative_end": 78.0
+        }
+      ],
+      "speaker_context": "Executive Fellow at Yale School of Management",
+      "daily_speaker_index": 1
+    },
+    {
+      "start": 2425.0,
+      "end": 2479.0,
+      "speaker": "William D. Cohan",
+      "title": "耶鲁研究员：马斯克一人可碾压任何参议员，财富波动如买汽水",
+      "title_lines": [
+        "耶鲁研究员",
+        "马斯克一人可碾压任何参议员",
+        "财富波动如买汽水"
+      ],
+      "title_highlights": [
+        "碾压参议员",
+        "财富波动"
+      ],
+      "subtitles": [
+        {
+          "index": 1,
+          "start": 2425.0,
+          "end": 2428.0,
+          "en": "Share a brown versus Bernie Moreno in Ohio.",
+          "zh": "俄亥俄州的谢罗德·布朗对阵伯尼·莫雷诺。",
+          "zh_highlights": [
+            "俄亥俄州"
+          ],
+          "en_highlights": [
+            "Ohio"
+          ],
+          "relative_start": 0.0,
+          "relative_end": 3.0
+        },
+        {
+          "index": 2,
+          "start": 2428.0,
+          "end": 2436.0,
+          "en": "And the two campaigns combined spent about $110, $115 million together, not any one campaign, but together.",
+          "zh": "两个竞选团队总共花费了约1.1亿到1.15亿美元，不是单方，而是合计。",
+          "zh_highlights": [
+            "1.1亿到1.15亿美元"
+          ],
+          "en_highlights": [
+            "$110, $115 million"
+          ],
+          "relative_start": 3.0,
+          "relative_end": 11.0
+        },
+        {
+          "index": 3,
+          "start": 2436.0,
+          "end": 2442.0,
+          "en": "The two, that's what the two campaign spent Elon Musk spent $250 million in that campaign race.",
+          "zh": "这就是两个竞选团队的花费，而埃隆·马斯克在那场竞选中花费了2.5亿美元。",
+          "zh_highlights": [
+            "2.5亿美元"
+          ],
+          "en_highlights": [
+            "$250 million"
+          ],
+          "relative_start": 11.0,
+          "relative_end": 17.0
+        },
+        {
+          "index": 4,
+          "start": 2442.0,
+          "end": 2445.0,
+          "en": "So by himself, he could swamp any US Senator.",
+          "zh": "所以他一个人就能碾压任何一位美国参议员。",
+          "zh_highlights": [
+            "碾压"
+          ],
+          "en_highlights": [
+            "swamp"
+          ],
+          "relative_start": 17.0,
+          "relative_end": 20.0
+        },
+        {
+          "index": 5,
+          "start": 2445.0,
+          "end": 2450.0,
+          "en": "But the way I would put it is if you look at the day to day fluctuations in his wealth, right?",
+          "zh": "但我想说的是，如果你看看他财富的日常波动，对吧？",
+          "zh_highlights": [
+            "日常波动"
+          ],
+          "en_highlights": [
+            "day to day fluctuations"
+          ],
+          "relative_start": 20.0,
+          "relative_end": 25.0
+        },
+        {
+          "index": 6,
+          "start": 2450.0,
+          "end": 2453.0,
+          "en": "Just the random motions of the stock market.",
+          "zh": "只是市场的随机波动。",
+          "zh_highlights": [
+            "市场波动"
+          ],
+          "en_highlights": [
+            "stock market"
+          ],
+          "relative_start": 25.0,
+          "relative_end": 28.0
+        },
+        {
+          "index": 7,
+          "start": 2453.0,
+          "end": 2462.0,
+          "en": "So he could, what he could spend in a political camp, when he spent in that political campaign, be like 1% of the day-to-day fluctuations in his wealth.",
+          "zh": "所以他在政治竞选中的花费，可能只相当于他财富日常波动的1%。",
+          "zh_highlights": [
+            "1%"
+          ],
+          "en_highlights": [
+            "1%"
+          ],
+          "relative_start": 28.0,
+          "relative_end": 37.0
+        },
+        {
+          "index": 8,
+          "start": 2462.0,
+          "end": 2472.0,
+          "en": "So he can swamp any Senator, any Congressman, probably any presidential candidate, about as casually as you or I would buy a soda.",
+          "zh": "所以他可以碾压任何参议员、任何众议员，甚至任何总统候选人，就像你我买一瓶汽水一样随意。",
+          "zh_highlights": [
+            "碾压",
+            "买汽水"
+          ],
+          "en_highlights": [
+            "swamp",
+            "buy a soda"
+          ],
+          "relative_start": 37.0,
+          "relative_end": 47.0
+        },
+        {
+          "index": 9,
+          "start": 2472.0,
+          "end": 2474.0,
+          "en": "Think about that.",
+          "zh": "想想看。",
+          "zh_highlights": [],
+          "en_highlights": [],
+          "relative_start": 47.0,
+          "relative_end": 49.0
+        },
+        {
+          "index": 10,
+          "start": 2474.0,
+          "end": 2479.0,
+          "en": "Again, this segment is not making me feel better. I'm very glad to see you, but you're not shearing me up on a Saturday.",
+          "zh": "再说一次，这段内容并没有让我感觉好一些。很高兴见到你，但你并没有在周六让我振奋起来。",
+          "zh_highlights": [],
+          "en_highlights": [],
+          "relative_start": 49.0,
+          "relative_end": 54.0
+        }
+      ],
+      "speaker_context": "Executive Fellow at Yale School of Management",
+      "daily_speaker_index": 1
+    },
+    {
+      "start": 2483.0,
+      "end": 2560.0,
+      "speaker": "William D. Cohan",
+      "title": "耶鲁研究员：从克拉苏到马斯克，财富如何摧毁共和制",
+      "title_lines": [
+        "耶鲁研究员",
+        "从克拉苏到马斯克",
+        "财富如何摧毁共和制"
+      ],
+      "title_highlights": [
+        "克拉苏",
+        "马斯克",
+        "摧毁共和制"
+      ],
+      "subtitles": [
+        {
+          "index": 1,
+          "start": 2483.0,
+          "end": 2486.0,
+          "en": "This piece that you have coming out, you used two very different historical examples.",
+          "zh": "你即将发表的这篇文章中，用了两个截然不同的历史例子。",
+          "zh_highlights": [
+            "历史例子"
+          ],
+          "en_highlights": [
+            "historical examples"
+          ],
+          "relative_start": 0.0,
+          "relative_end": 3.0
+        },
+        {
+          "index": 2,
+          "start": 2486.0,
+          "end": 2492.0,
+          "en": "One is in Rome with the guy who bankrolled Julius Caesar.",
+          "zh": "一个是罗马，资助尤利乌斯·凯撒的那个人。",
+          "zh_highlights": [
+            "资助凯撒"
+          ],
+          "en_highlights": [
+            "bankrolled Julius Caesar"
+          ],
+          "relative_start": 3.0,
+          "relative_end": 9.0
+        },
+        {
+          "index": 3,
+          "start": 2492.0,
+          "end": 2496.0,
+          "en": "And the other is, at the turn of 20th century, when Teddy Roosevelt broke up JP Morgan's wealth.",
+          "zh": "另一个是20世纪初，西奥多·罗斯福拆分JP摩根的财富。",
+          "zh_highlights": [
+            "拆分JP摩根"
+          ],
+          "en_highlights": [
+            "broke up JP Morgan's wealth"
+          ],
+          "relative_start": 9.0,
+          "relative_end": 13.0
+        },
+        {
+          "index": 4,
+          "start": 2496.0,
+          "end": 2501.0,
+          "en": "Yeah, Crassus was the wealthiest person in the end of the Roman Republic.",
+          "zh": "是的，克拉苏是罗马共和国末期最富有的人。",
+          "zh_highlights": [
+            "克拉苏",
+            "最富有"
+          ],
+          "en_highlights": [
+            "Crassus",
+            "wealthiest"
+          ],
+          "relative_start": 13.0,
+          "relative_end": 18.0
+        },
+        {
+          "index": 5,
+          "start": 2501.0,
+          "end": 2508.0,
+          "en": "He bankrolled Caesar. What he basically was use his enormous wealth to, well, they preserved the forms of the Republic.",
+          "zh": "他资助了凯撒。他基本上是利用巨额财富，嗯，他们保留了共和国的形式。",
+          "zh_highlights": [
+            "资助凯撒",
+            "保留形式"
+          ],
+          "en_highlights": [
+            "bankrolled Caesar",
+            "preserved the forms"
+          ],
+          "relative_start": 18.0,
+          "relative_end": 25.0
+        },
+        {
+          "index": 6,
+          "start": 2508.0,
+          "end": 2512.0,
+          "en": "So the Senate still existed, right? All of these rules were there.",
+          "zh": "所以元老院仍然存在，对吧？所有规则都在。",
+          "zh_highlights": [
+            "元老院"
+          ],
+          "en_highlights": [
+            "Senate"
+          ],
+          "relative_start": 25.0,
+          "relative_end": 29.0
+        },
+        {
+          "index": 7,
+          "start": 2512.0,
+          "end": 2521.0,
+          "en": "In practice, Crassus and his wealth and other sort of Roman oligarchs combined to bypass all those things and rule the Republic directly.",
+          "zh": "实际上，克拉苏和他的财富以及其他罗马寡头联手绕过了这一切，直接统治了共和国。",
+          "zh_highlights": [
+            "绕过",
+            "直接统治"
+          ],
+          "en_highlights": [
+            "bypass",
+            "rule directly"
+          ],
+          "relative_start": 29.0,
+          "relative_end": 38.0
+        },
+        {
+          "index": 8,
+          "start": 2521.0,
+          "end": 2526.0,
+          "en": "And that led quite directly to the fall of the Republic and what became the Roman Empire.",
+          "zh": "这直接导致了共和国的灭亡，以及后来的罗马帝国。",
+          "zh_highlights": [
+            "共和国灭亡",
+            "罗马帝国"
+          ],
+          "en_highlights": [
+            "fall of the Republic",
+            "Roman Empire"
+          ],
+          "relative_start": 38.0,
+          "relative_end": 43.0
+        },
+        {
+          "index": 9,
+          "start": 2526.0,
+          "end": 2531.0,
+          "en": "Crassus used to say that you're not really wealthy unless you can afford to pay for a private army.",
+          "zh": "克拉苏曾说过，除非你能负担得起一支私人军队，否则你算不上真正的富有。",
+          "zh_highlights": [
+            "私人军队"
+          ],
+          "en_highlights": [
+            "private army"
+          ],
+          "relative_start": 43.0,
+          "relative_end": 48.0
+        },
+        {
+          "index": 10,
+          "start": 2531.0,
+          "end": 2534.0,
+          "en": "That's what the definition of sort of real wealth.",
+          "zh": "这就是真正财富的定义。",
+          "zh_highlights": [
+            "真正财富"
+          ],
+          "en_highlights": [
+            "real wealth"
+          ],
+          "relative_start": 48.0,
+          "relative_end": 51.0
+        },
+        {
+          "index": 11,
+          "start": 2534.0,
+          "end": 2538.0,
+          "en": "And by that standard, you know, the United States is a lot of people was real wealth.",
+          "zh": "按照这个标准，美国有很多人拥有真正的财富。",
+          "zh_highlights": [
+            "美国"
+          ],
+          "en_highlights": [
+            "United States"
+          ],
+          "relative_start": 51.0,
+          "relative_end": 55.0
+        },
+        {
+          "index": 12,
+          "start": 2539.0,
+          "end": 2542.0,
+          "en": "Republics have dealt with this problem through all of history.",
+          "zh": "共和制在历史上一直面临这个问题。",
+          "zh_highlights": [
+            "共和制"
+          ],
+          "en_highlights": [
+            "Republics"
+          ],
+          "relative_start": 56.0,
+          "relative_end": 59.0
+        },
+        {
+          "index": 13,
+          "start": 2542.0,
+          "end": 2548.0,
+          "en": "And this is the center, maybe the most important way in which a Republic falls that because Republics are very good at generating private wealth.",
+          "zh": "这是核心，也许是共和制衰亡的最重要方式——因为共和制非常擅长创造私人财富。",
+          "zh_highlights": [
+            "共和制衰亡",
+            "私人财富"
+          ],
+          "en_highlights": [
+            "Republic falls",
+            "private wealth"
+          ],
+          "relative_start": 59.0,
+          "relative_end": 65.0
+        },
+        {
+          "index": 14,
+          "start": 2548.0,
+          "end": 2553.0,
+          "en": "And then people with private wealth say, well, you know, there are only so many yachts I can buy.",
+          "zh": "然后拥有私人财富的人会说，嗯，我能买的游艇是有限的。",
+          "zh_highlights": [
+            "游艇"
+          ],
+          "en_highlights": [
+            "yachts"
+          ],
+          "relative_start": 65.0,
+          "relative_end": 70.0
+        },
+        {
+          "index": 15,
+          "start": 2553.0,
+          "end": 2556.0,
+          "en": "There are only so many in the modern context private jets I can buy.",
+          "zh": "在现代，我能买的私人飞机也是有限的。",
+          "zh_highlights": [
+            "私人飞机"
+          ],
+          "en_highlights": [
+            "private jets"
+          ],
+          "relative_start": 70.0,
+          "relative_end": 73.0
+        },
+        {
+          "index": 16,
+          "start": 2556.0,
+          "end": 2560.0,
+          "en": "But power is something that I can buy that has no rivals, right?",
+          "zh": "但权力是我可以买到的、没有竞争对手的东西，对吧？",
+          "zh_highlights": [
+            "权力",
+            "没有竞争对手"
+          ],
+          "en_highlights": [
+            "power",
+            "no rivals"
+          ],
+          "relative_start": 73.0,
+          "relative_end": 77.0
+        }
+      ],
+      "speaker_context": "Executive Fellow at Yale School of Management",
+      "daily_speaker_index": 1
+    },
+    {
+      "start": 2560.0,
+      "end": 2610.0,
+      "speaker": "William D. Cohan",
+      "title": "耶鲁研究员：罗斯福如何对抗JP摩根，历史警示今日",
+      "title_lines": [
+        "耶鲁研究员",
+        "罗斯福如何对抗JP摩根",
+        "历史警示今日"
+      ],
+      "title_highlights": [
+        "罗斯福",
+        "JP摩根",
+        "历史警示"
+      ],
+      "subtitles": [
+        {
+          "index": 1,
+          "start": 2560.0,
+          "end": 2564.0,
+          "en": "But when I have power, then I'm above the law, then I'm above everything else.",
+          "zh": "但当我拥有权力时，我就凌驾于法律之上，凌驾于一切之上。",
+          "zh_highlights": [
+            "凌驾于法律之上"
+          ],
+          "en_highlights": [
+            "above the law"
+          ],
+          "relative_start": 0.0,
+          "relative_end": 4.0
+        },
+        {
+          "index": 2,
+          "start": 2565.0,
+          "end": 2567.0,
+          "en": "But the United States has dealt with this issue before.",
+          "zh": "但美国以前处理过这个问题。",
+          "zh_highlights": [
+            "美国"
+          ],
+          "en_highlights": [
+            "United States"
+          ],
+          "relative_start": 5.0,
+          "relative_end": 7.0
+        },
+        {
+          "index": 3,
+          "start": 2567.0,
+          "end": 2575.0,
+          "en": "And so theater Roosevelt and JP Morgan, when Roosevelt began to investigate JP Morgan's trust and his sort of sort of control of the US economy.",
+          "zh": "所以西奥多·罗斯福和JP摩根，当罗斯福开始调查摩根的信托及其对美国经济的控制时。",
+          "zh_highlights": [
+            "罗斯福",
+            "JP摩根",
+            "控制经济"
+          ],
+          "en_highlights": [
+            "Roosevelt",
+            "JP Morgan",
+            "control of the US economy"
+          ],
+          "relative_start": 7.0,
+          "relative_end": 15.0
+        },
+        {
+          "index": 4,
+          "start": 2575.0,
+          "end": 2585.0,
+          "en": "And while Morgan himself was not that rich, his financial network was such that he really did have a level of control over the US economy that probably no individual today approaches.",
+          "zh": "虽然摩根本人并非那么富有，但他的金融网络使他确实对美国经济拥有一定程度的控制，这种程度今天可能无人能及。",
+          "zh_highlights": [
+            "金融网络",
+            "控制经济"
+          ],
+          "en_highlights": [
+            "financial network",
+            "control"
+          ],
+          "relative_start": 15.0,
+          "relative_end": 25.0
+        },
+        {
+          "index": 5,
+          "start": 2585.0,
+          "end": 2593.0,
+          "en": "Morgan said to Roosevelt, if you have a problem with what I am doing, have your man meet my man.",
+          "zh": "摩根对罗斯福说，如果你对我的所作所为有意见，让你的人和我的人谈谈。",
+          "zh_highlights": [
+            "你的人",
+            "我的人"
+          ],
+          "en_highlights": [
+            "your man",
+            "my man"
+          ],
+          "relative_start": 25.0,
+          "relative_end": 33.0
+        },
+        {
+          "index": 6,
+          "start": 2593.0,
+          "end": 2595.0,
+          "en": "And tell us what we're doing wrong.",
+          "zh": "告诉我们哪里做错了。",
+          "zh_highlights": [],
+          "en_highlights": [],
+          "relative_start": 33.0,
+          "relative_end": 35.0
+        },
+        {
+          "index": 7,
+          "start": 2595.0,
+          "end": 2596.0,
+          "en": "Yeah.",
+          "zh": "是的。",
+          "zh_highlights": [],
+          "en_highlights": [],
+          "relative_start": 35.0,
+          "relative_end": 36.0
+        },
+        {
+          "index": 8,
+          "start": 2596.0,
+          "end": 2599.0,
+          "en": "And by your man, he met the attorney general.",
+          "zh": "他所说的“你的人”指的是司法部长。",
+          "zh_highlights": [
+            "司法部长"
+          ],
+          "en_highlights": [
+            "attorney general"
+          ],
+          "relative_start": 36.0,
+          "relative_end": 39.0
+        },
+        {
+          "index": 9,
+          "start": 2599.0,
+          "end": 2610.0,
+          "en": "So JP Morgan, as you know, theater Roosevelt himself said, say that JP Morgan could not see theater Roosevelt as anything other but a rival operator of another big firm.",
+          "zh": "所以JP摩根，如你所知，西奥多·罗斯福本人曾说，摩根只能将罗斯福视为另一家大公司的竞争对手。",
+          "zh_highlights": [
+            "竞争对手"
+          ],
+          "en_highlights": [
+            "rival operator"
+          ],
+          "relative_start": 39.0,
+          "relative_end": 50.0
+        }
+      ],
+      "speaker_context": "Executive Fellow at Yale School of Management",
+      "daily_speaker_index": 1
+    }
+  ]
+}

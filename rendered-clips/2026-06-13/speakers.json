@@ -1,0 +1,18 @@
+{
+  "show_date": "2026-06-13",
+  "source_transcript": "work/daily/transcript.json",
+  "max_speakers": 3,
+  "speakers": [
+    {
+      "speaker": "William D. Cohan",
+      "speaker_context": "Executive Fellow at Yale School of Management",
+      "segment_start": 2297.0,
+      "segment_end": 2610.0,
+      "duration": 313.0,
+      "confidence": 0.9,
+      "importance": 0.8,
+      "score": 3.022,
+      "reason": "Provides historical perspective on wealth concentration, comparing Elon Musk to historical figures like Rockefeller and Crassus, and discusses implications for democracy."
+    }
+  ]
+}
