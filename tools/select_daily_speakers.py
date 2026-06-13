@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Select keynote guest speakers from a full Bloomberg China Show transcript."""
+"""Select keynote guest speakers from a full Bloomberg show transcript."""
 
 from __future__ import annotations
 

@@ -301,6 +301,27 @@ def measured_block_height(
     return sum(heights) + line_spacing * (len(lines) - 1)
 
 
+def clamp_lines_to_max(
+    draw: ImageDraw.ImageDraw,
+    lines: Sequence[Sequence[IndexedChar]],
+    font: ImageFont.FreeTypeFont,
+    max_width: int,
+    max_lines: Optional[int],
+) -> list[list[IndexedChar]]:
+    if max_lines is None or len(lines) <= max_lines:
+        return [list(line) for line in lines]
+    if max_lines <= 0:
+        return []
+
+    clamped = [list(line) for line in lines[:max_lines]]
+    ellipsis = [(".", -1), (".", -1), (".", -1)]
+    last = trim_line(clamped[-1])
+    while last and line_width(draw, last + ellipsis, font) > max_width:
+        last.pop()
+    clamped[-1] = last + ellipsis if last else ellipsis
+    return clamped
+
+
 def fitting_layout(
     text: str,
     max_width: int,
@@ -309,19 +330,21 @@ def fitting_layout(
     min_size: int,
     bold: bool,
     line_spacing: int,
+    max_lines: Optional[int] = None,
 ) -> tuple[ImageFont.FreeTypeFont, list[list[IndexedChar]]]:
     tmp = Image.new("RGBA", (1, 1))
     draw = ImageDraw.Draw(tmp)
-    last_font = get_font(min_size, bold)
+    floor_size = min_size if max_lines is None else min(min_size, 28)
+    last_font = get_font(floor_size, bold)
     last_lines = wrap_text(text, last_font, max_width, draw)
-    for size in range(max_size, min_size - 1, -2):
+    for size in range(max_size, floor_size - 1, -2):
         font = get_font(size, bold)
         lines = wrap_text(text, font, max_width, draw)
         height = measured_block_height(draw, lines, font, line_spacing)
-        if height <= max_height:
+        if height <= max_height and (max_lines is None or len(lines) <= max_lines):
             return font, lines
         last_font, last_lines = font, lines
-    return last_font, last_lines
+    return last_font, clamp_lines_to_max(draw, last_lines, last_font, max_width, max_lines)
 
 
 def highlighted_ranges(text: str, highlights: Optional[List[str]]) -> list[Tuple[int, int]]:
@@ -396,6 +419,7 @@ def draw_wrapped_text_with_highlights(
     line_spacing: int = 4,
     shadow_alpha: float = 0.78,
     shadow_blur: float = 5.0,
+    max_lines: Optional[int] = None,
 ) -> None:
     """Draw AppKit-style wrapped text with optional yellow keyword highlights."""
     if not text.strip():
@@ -409,6 +433,7 @@ def draw_wrapped_text_with_highlights(
         min_size=min_font,
         bold=bold,
         line_spacing=line_spacing,
+        max_lines=max_lines,
     )
     tmp = Image.new("RGBA", (1, 1))
     measure_draw = ImageDraw.Draw(tmp)
@@ -451,27 +476,31 @@ def render_static_overlay(job: dict) -> Image.Image:
 
     # Draw title
     if len(title_lines) >= 3:
-        # 3-line large title layout
+        # Keep each logical title line in its own box. If generated title lines
+        # are too long, shrink before wrapping so adjacent boxes never collide.
         draw_wrapped_text_with_highlights(
             img, title_lines[0],
             x=28, y=250, max_width=1024, max_height=150,
-            max_font=138, min_font=112,
+            max_font=122, min_font=44,
             line_spacing=0,
             highlights=title_highlights,
+            max_lines=1,
         )
         draw_wrapped_text_with_highlights(
             img, title_lines[1],
             x=36, y=408, max_width=1008, max_height=132,
-            max_font=124, min_font=96,
+            max_font=112, min_font=40,
             line_spacing=0,
             highlights=title_highlights,
+            max_lines=1,
         )
         draw_wrapped_text_with_highlights(
             img, title_lines[2],
             x=36, y=544, max_width=1008, max_height=132,
-            max_font=112, min_font=88,
+            max_font=104, min_font=38,
             line_spacing=0,
             highlights=title_highlights,
+            max_lines=1,
         )
     elif len(title_lines) >= 2:
         draw_wrapped_text_with_highlights(

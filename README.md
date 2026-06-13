@@ -65,18 +65,22 @@ Known downloaded outputs:
 
 The workflow only downloads public HLS media URLs exposed by Bloomberg's own media manifests. It does not bypass DRM, paywall checks, or encrypted streams.
 
-## Daily China Show clips
+## Daily Bloomberg show clips
 
-`.github/workflows/daily-china-show.yml` runs every day at 03:00 Beijing time
-(`0 19 * * *` UTC). It resolves yesterday's China Show URL using the Bloomberg
-date pattern, downloads the episode, transcribes it, selects keynote guest
-speakers, renders 3-5 KC Desktop formatted highlight clips per selected speaker,
-and commits the generated files to:
+`.github/workflows/daily-china-show.yml` runs at 03:00 Beijing time. Tuesday
+through Saturday Beijing runs clip the previous day's Bloomberg China Show;
+Sunday and Monday Beijing runs clip the previous day's Bloomberg Weekend. The
+workflow resolves the Bloomberg URL using the date pattern, downloads the
+episode, transcribes it, selects keynote guest speakers, renders 3-5 KC Desktop
+formatted highlight clips per selected speaker, and commits the generated files
+to:
 
 ```text
 rendered-clips/YYYY-MM-DD/
 ```
 
-Manual dispatch accepts optional `show_date`, `url`, `max_speakers`,
-`clips_per_speaker`, and `font_preset` inputs. The default font preset is
+Manual dispatch accepts optional `show_date`, `show_type`, `url`,
+`max_speakers`, `clips_per_speaker`, and `font_preset` inputs. `show_type`
+defaults to `auto`, which uses China Show for Monday-Friday show dates and
+Bloomberg Weekend for Saturday-Sunday show dates. The default font preset is
 `noto-serif-sc`.

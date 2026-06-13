@@ -1,16 +1,28 @@
-name: Daily China Show Clips
+name: Daily Bloomberg Show Clips
 
 on:
   schedule:
     # 03:00 Asia/Shanghai = 19:00 UTC on the previous calendar day.
-    - cron: "0 19 * * *"
+    # Tuesday-Saturday Beijing runs clip the previous day's Bloomberg China Show.
+    - cron: "0 19 * * 1-5"
+    # Sunday-Monday Beijing runs clip the previous day's Bloomberg Weekend.
+    - cron: "0 19 * * 6,0"
   workflow_dispatch:
     inputs:
       show_date:
-        description: "China Show date in YYYY-MM-DD. Defaults to yesterday in Asia/Shanghai."
+        description: "Show date in YYYY-MM-DD. Defaults to yesterday in Asia/Shanghai."
         required: false
         type: string
         default: ""
+      show_type:
+        description: "Bloomberg show type."
+        required: false
+        type: choice
+        options:
+          - auto
+          - china
+          - weekend
+        default: auto
       url:
         description: "Override Bloomberg video URL."
         required: false
@@ -41,7 +53,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: daily-china-show-main
+  group: daily-bloomberg-show-main
   cancel-in-progress: false
 
 jobs:
@@ -52,6 +64,7 @@ jobs:
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
       SHOW_DATE_INPUT: ${{ github.event.inputs.show_date || '' }}
+      SHOW_TYPE_INPUT: ${{ github.event.inputs.show_type || 'auto' }}
       URL_INPUT: ${{ github.event.inputs.url || '' }}
       MAX_SPEAKERS: ${{ github.event.inputs.max_speakers || '3' }}
       CLIPS_PER_SPEAKER: ${{ github.event.inputs.clips_per_speaker || '5' }}
@@ -82,11 +95,12 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install faster-whisper Pillow
 
-      - name: Resolve China Show URL
+      - name: Resolve Bloomberg show URL
         run: |
           mkdir -p work/daily
           python tools/resolve_china_show_url.py \
             --show-date "$SHOW_DATE_INPUT" \
+            --show-type "$SHOW_TYPE_INPUT" \
             --url "$URL_INPUT" \
             --github-env "$GITHUB_ENV" \
             --metadata work/daily/show.json
@@ -194,6 +208,6 @@ jobs:
             echo "No rendered clip changes to commit."
             exit 0
           fi
-          git commit -m "chore: publish China Show clips ${SHOW_DATE}"
+          git commit -m "chore: publish ${SHOW_TYPE} show clips ${SHOW_DATE}"
           git pull --rebase origin main
           git push origin HEAD:main
